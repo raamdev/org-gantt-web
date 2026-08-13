@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>org-gantt-web — plain-text project timeline</title>
+<style>
+  :root {
+    --paper: #F7F6F1;
+    --panel: #FFFFFF;
+    --ink: #232A31;
+    --muted: #7A8288;
+    --grid: #E5E4DC;
+    --weekend: #ECEADF;
+    --day-stripe: #F6F5EF;
+    --bar: #33688A;
+    --bar-fill: #24506B;
+    --group: #2B3540;
+    --accent: #E5731F;
+    --done: #5E8C6A;
+    --buffer-bg: #FDFDFB;
+    --modeline: #3A4450;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); font-family: var(--sans); }
+  body { padding: 20px 24px 48px; max-width: 1200px; margin: 0 auto; }
+
+  /* ---------- header ---------- */
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px 28px; margin-bottom: 6px; }
+  #projectTitle {
+    font-size: 26px; font-weight: 700; letter-spacing: -0.01em;
+    border: none; background: transparent; color: var(--ink);
+    font-family: var(--sans); min-width: 260px; flex: 1;
+    border-bottom: 2px dashed transparent; padding: 2px 0;
+  }
+  #projectTitle:hover, #projectTitle:focus { border-bottom-color: var(--grid); outline: none; }
+  .hstat { display: flex; flex-direction: column; gap: 2px; }
+  .hstat label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .hstat .val { font-size: 16px; font-weight: 600; font-family: var(--mono); }
+  .hstat input[type="date"] {
+    font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--ink);
+    border: none; background: transparent; padding: 0; border-bottom: 2px dashed transparent;
+  }
+  .hstat input[type="date"]:hover, .hstat input[type="date"]:focus { border-bottom-color: var(--grid); outline: none; }
+  .countdown.late { color: var(--accent); }
+
+  .subhead { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .subhead code { font-family: var(--mono); background: var(--weekend); padding: 1px 5px; border-radius: 3px; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  button {
+    font-family: var(--sans); font-size: 13px; font-weight: 600;
+    border: 1.5px solid var(--ink); background: var(--panel); color: var(--ink);
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  }
+  button:hover { background: var(--ink); color: var(--panel); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--ink); color: var(--panel); }
+  button.primary:hover { background: var(--bar); border-color: var(--bar); }
+  button.quiet { border-color: var(--grid); color: var(--muted); font-weight: 500; }
+  button.quiet:hover { background: var(--weekend); color: var(--ink); }
+  button.danger:hover { background: var(--accent); border-color: var(--accent); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button:disabled:hover { background: var(--panel); color: var(--ink); }
+  .tb-spacer { flex: 1 1 24px; }
+  .zoomctl { display: inline-flex; align-items: stretch; border: 1.5px solid var(--ink); border-radius: 6px; overflow: hidden; }
+  .zoomctl button { border: none; border-radius: 0; padding: 6px 12px; font-weight: 700; }
+  .zoomctl button + button { border-left: 1.5px solid var(--ink); }
+  .zoomctl #zoomFit { font-weight: 600; font-size: 12px; }
+
+  /* ---------- sync status ---------- */
+  .syncbar {
+    display: flex; align-items: center; gap: 8px;
+    margin: -4px 0 16px; font-family: var(--mono); font-size: 12px; color: var(--muted);
+  }
+  .syncbar .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--muted); }
+  .syncbar .dot.ok { background: var(--done); }
+  .syncbar .dot.dirty { background: var(--accent); }
+  .syncbar .dot.none { background: var(--grid); }
+  .syncbar .fname { color: var(--ink); font-weight: 600; }
+
+  /* ---------- project switcher ---------- */
+  .projectbar { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+  .projmenu-wrap { position: relative; }
+  .projmenu-btn {
+    font-family: var(--sans); font-weight: 700; font-size: 14px;
+    border: 1.5px solid var(--ink); background: var(--panel); color: var(--ink);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .projmenu-btn:hover { background: var(--ink); color: var(--panel); }
+  .projmenu-btn .caret { color: var(--muted); font-weight: 400; }
+  .projmenu {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 20;
+    min-width: 280px; max-width: 380px; background: var(--panel);
+    border: 1.5px solid var(--grid); border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.12); padding: 6px;
+  }
+  .projlist { max-height: 320px; overflow-y: auto; }
+  .projrow { display: flex; align-items: stretch; gap: 2px; border-radius: 6px; }
+  .projrow:hover { background: var(--weekend); }
+  .projrow.current { background: #F3F7FA; }
+  .projpick {
+    flex: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    border: none; background: none; text-align: left; padding: 8px 10px; cursor: pointer;
+    font-family: var(--sans); border-radius: 6px; min-width: 0;
+  }
+  .projpick:hover { background: none; color: var(--ink); }
+  .projpick .pname { font-size: 13.5px; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .projpick .pwhen { font-size: 11px; color: var(--muted); font-family: var(--mono); flex: none; }
+  .projrow.current .pname { color: var(--bar); }
+  .projdel { border: none; background: none; color: var(--muted); cursor: pointer; padding: 0 9px; font-size: 12px; border-radius: 6px; }
+  .projdel:hover { background: var(--accent); color: #fff; }
+  .projnew {
+    width: 100%; margin-top: 4px; border: none; border-top: 1px dashed var(--grid);
+    border-radius: 0 0 6px 6px; background: none; color: var(--bar); font-weight: 600;
+    padding: 9px 10px; cursor: pointer; text-align: left; font-family: var(--sans); font-size: 13px;
+  }
+  .projnew:hover { background: var(--weekend); color: var(--bar); }
+  .savestatus { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .savestatus.saved { color: var(--done); }
+  .savestatus.dirty { color: var(--accent); }
+  .savestatus.error { color: var(--accent); font-weight: 700; }
+  .demoflag {
+    font-family: var(--mono); font-size: 12px; color: var(--accent);
+    background: #FFF6EE; border: 1px solid #F3D9C4; padding: 3px 8px; border-radius: 6px;
+  }
+
+  /* ---------- chart ---------- */
+  .chart-wrap {
+    background: var(--panel); border: 1.5px solid var(--grid); border-radius: 10px;
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .chart-scroll { overflow-x: auto; }
+  .chart { position: relative; min-width: 100%; }
+
+  .axis { position: relative; height: 52px; border-bottom: 1.5px solid var(--grid); }
+  .axis .month-lab {
+    position: absolute; top: 3px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink); white-space: nowrap;
+  }
+  .axis .daynum { position: absolute; top: 19px; text-align: center; pointer-events: none; }
+  .axis .daynum .wd {
+    display: block; font-family: var(--mono); font-size: 9px; line-height: 1.1;
+    color: var(--muted); text-transform: uppercase;
+  }
+  .axis .daynum .dn {
+    display: block; font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+    line-height: 1.15; color: var(--ink);
+  }
+  .axis .daynum.weekend .dn { color: var(--muted); }
+  .axis .daynum.wk { top: 22px; text-align: left; padding-left: 4px; }
+  .axis .daynum.wk .dn { font-size: 11px; font-weight: 600; color: var(--muted); }
+
+  .row { position: relative; height: 44px; border-bottom: 1px solid var(--grid); }
+  .row:last-child { border-bottom: none; }
+  .row .rowlabel {
+    position: sticky; left: 0; z-index: 5;
+    display: inline-flex; align-items: center; gap: 5px; height: 100%;
+    padding: 0 10px 0 14px; font-size: 13px; font-weight: 600;
+    background: linear-gradient(to right, var(--panel) 82%, transparent);
+    max-width: 240px; pointer-events: none; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row.child .rowlabel { padding-left: 38px; font-weight: 500; font-size: 12.5px; color: #3B434B; }
+  .row.grouprow .rowlabel { font-weight: 700; }
+  .row.selected { background: #F3F7FA; }
+  .row.reordering { opacity: 0.45; }
+  .toggle {
+    pointer-events: auto; cursor: pointer; border: none; background: none;
+    font-size: 11px; color: var(--muted); padding: 4px; line-height: 1;
+  }
+  .toggle:hover { color: var(--ink); background: none; }
+
+  .gridlayer { position: absolute; inset: 0; pointer-events: none; }
+  .daycol { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--grid); }
+  .daycol.odd { background: var(--day-stripe); }
+  .daycol.weekend { background: var(--weekend); }
+  .gridlayer.dense .daycol { border-right: none; }
+  .wkline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--grid); }
+  .dropline {
+    position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--accent);
+    z-index: 8; pointer-events: none;
+  }
+  .dropline::before {
+    content: ""; position: absolute; left: 0; top: -4px; width: 6px; height: 6px;
+    border-radius: 50%; background: var(--accent);
+  }
+
+  .bar {
+    position: absolute; top: 9px; height: 26px; border-radius: 5px;
+    background: var(--bar); cursor: grab; touch-action: none;
+    display: flex; align-items: center; overflow: hidden;
+  }
+  .bar:active { cursor: grabbing; }
+  .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bar-fill); }
+  .bar.done100 { background: var(--done); }
+  .bar.done100 .fill { background: var(--done); }
+  .bar .pct {
+    position: relative; z-index: 2; color: #fff; font-family: var(--mono);
+    font-size: 10px; padding-left: 8px; user-select: none; white-space: nowrap;
+  }
+  .bar .handle {
+    position: absolute; right: 0; top: 0; bottom: 0; width: 10px; cursor: ew-resize; z-index: 3;
+  }
+  .bar .handle::after {
+    content: ""; position: absolute; right: 3px; top: 7px; bottom: 7px; width: 2px;
+    background: rgba(255,255,255,0.55); border-radius: 1px;
+  }
+
+  /* summary bar for parent groups: thin dark span with end caps */
+  .groupbar {
+    position: absolute; top: 14px; height: 9px; border-radius: 2px;
+    background: var(--group); cursor: grab; touch-action: none;
+  }
+  .groupbar:active { cursor: grabbing; }
+  .groupbar::before, .groupbar::after {
+    content: ""; position: absolute; top: 9px; border-left: 5px solid transparent;
+    border-right: 5px solid transparent; border-top: 6px solid var(--group);
+  }
+  .groupbar::before { left: 0; }
+  .groupbar::after { right: 0; }
+  .groupbar .gfill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--done); border-radius: 2px 0 0 2px; }
+  .groupbar .gtag {
+    position: absolute; left: calc(100% + 10px); top: -4px;
+    font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap;
+  }
+  .groupbar.done100 { background: var(--done); }
+  .groupbar.done100::before, .groupbar.done100::after { border-top-color: var(--done); }
+
+  .milestone {
+    position: absolute; top: 12px; width: 20px; height: 20px; cursor: grab; touch-action: none; z-index: 4;
+  }
+  .milestone svg { display: block; }
+  .milestone.done polygon { fill: var(--done); }
+
+  .marker { position: absolute; top: 0; bottom: 0; width: 0; z-index: 3; pointer-events: none; }
+  .marker .line { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; }
+  .marker.today .line { background: var(--accent); }
+  .marker.target .line {
+    background: repeating-linear-gradient(to bottom, var(--accent) 0 6px, transparent 6px 11px);
+  }
+  .marker .tag {
+    position: absolute; top: 2px; left: 4px; font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); white-space: nowrap;
+  }
+
+  .empty-hint { padding: 28px; color: var(--muted); font-size: 14px; }
+
+  /* ---------- editor ---------- */
+  .editor {
+    background: var(--panel); border: 1.5px solid var(--grid); border-radius: 10px;
+    padding: 14px 16px; margin-bottom: 20px; display: none;
+  }
+  .editor.open { display: block; }
+  .editor .fields { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .field input[type="text"] {
+    font-family: var(--sans); font-size: 14px; padding: 6px 8px;
+    border: 1.5px solid var(--grid); border-radius: 6px; min-width: 220px;
+  }
+  .field input[type="date"] {
+    font-family: var(--mono); font-size: 13px; padding: 6px 8px;
+    border: 1.5px solid var(--grid); border-radius: 6px;
+  }
+  .field input:focus { outline: none; border-color: var(--bar); }
+  .field.progress { min-width: 180px; }
+  .field .progrow { display: flex; align-items: center; gap: 10px; }
+  .field input[type="range"] { accent-color: var(--bar); width: 130px; }
+  .field .progval { font-family: var(--mono); font-size: 13px; width: 42px; }
+  .groupnote { font-size: 12px; color: var(--muted); font-family: var(--mono); align-self: center; padding-bottom: 8px; }
+
+  .childadd { margin-top: 12px; border-top: 1px dashed var(--grid); padding-top: 10px; display: none; }
+  .childadd.show { display: block; }
+  .childadd label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); display: block; margin-bottom: 5px; }
+  .childadd .addrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .childadd input[type="text"] {
+    width: 100%; max-width: 380px; font-family: var(--sans); font-size: 13.5px;
+    padding: 6px 8px; border: 1.5px dashed var(--grid); border-radius: 6px; background: transparent;
+  }
+  .childadd input[type="text"]:focus { outline: none; border-style: solid; border-color: var(--bar); }
+  .childadd .hint { font-size: 12px; color: var(--muted); }
+
+  /* ---------- org buffer (signature) ---------- */
+  .buffer {
+    border: 1.5px solid var(--modeline); border-radius: 10px; overflow: hidden;
+    background: var(--buffer-bg);
+  }
+  .buffer .tabbar {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--weekend); border-bottom: 1.5px solid var(--grid); padding: 6px 10px;
+  }
+  .buffer .filename { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  .buffer .tab-actions { display: flex; gap: 6px; }
+  .buffer .tab-actions button { padding: 3px 10px; font-size: 12px; }
+  #orgText {
+    display: block; width: 100%; min-height: 260px; resize: vertical;
+    border: none; background: transparent; padding: 14px 16px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.55; color: var(--ink);
+  }
+  #orgText:focus { outline: none; background: #FFFFFF; }
+  .buffer .modeline {
+    font-family: var(--mono); font-size: 11.5px; color: #DDE3EA;
+    background: var(--modeline); padding: 4px 12px; display: flex; justify-content: space-between; gap: 12px;
+  }
+  .buffer .modeline .dirty { color: var(--accent); font-weight: 700; }
+  .applybar { display: none; gap: 8px; padding: 8px 10px; background: #FFF6EE; border-top: 1.5px solid var(--grid); align-items: center; }
+  .applybar.show { display: flex; }
+  .applybar .msg { font-size: 12px; color: var(--muted); flex: 1; font-family: var(--mono); }
+  .applybar .msg.err { color: var(--accent); }
+
+  .footnote { margin-top: 14px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .footnote code { font-family: var(--mono); background: var(--weekend); padding: 1px 5px; border-radius: 3px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .bar, .milestone, .groupbar { transition: left 0.08s linear, width 0.08s linear; }
+  }
+  @media (max-width: 700px) {
+    body { padding: 12px 10px 40px; }
+    .row .rowlabel { max-width: 140px; font-size: 12px; }
+    .row.child .rowlabel { padding-left: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="projectbar" id="projectbar" style="display:none">
+  <div class="projmenu-wrap">
+    <button class="projmenu-btn" id="projMenuBtn" aria-haspopup="true" aria-expanded="false">
+      <span id="projCurrent">Projects</span> <span class="caret">▾</span>
+    </button>
+    <div class="projmenu" id="projMenu" hidden role="menu">
+      <div class="projlist" id="projList"></div>
+      <button class="projnew" id="projNew">+ New project</button>
+    </div>
+  </div>
+  <span class="savestatus" id="saveStatus"></span>
+  <span class="demoflag" id="demoFlag" hidden>Demo — changes stay in your browser, not saved to disk</span>
+</div>
+
+<header>
+  <input id="projectTitle" value="Bathroom Renovation" aria-label="Project title" />
+  <div class="hstat">
+    <label>Target date</label>
+    <input type="date" id="targetDate" aria-label="Target end date" />
+  </div>
+  <div class="hstat">
+    <label>Days left</label>
+    <div class="val countdown" id="countdown">—</div>
+  </div>
+  <div class="hstat">
+    <label>Overall</label>
+    <div class="val" id="overall">0%</div>
+  </div>
+</header>
+<div class="subhead">The <code>.org</code> buffer below is the database — drag bars up here, or edit the text and apply. Both stay in sync.</div>
+
+<div class="toolbar">
+  <button class="primary" id="addTask">+ Task</button>
+  <button id="addGroup">+ Phase</button>
+  <button id="addMilestone">◆ Milestone</button>
+  <button class="quiet" id="downloadOrg">Download .org</button>
+  <button class="quiet" id="copyOrg">Copy org</button>
+  <span class="tb-spacer"></span>
+  <div class="zoomctl" role="group" aria-label="Zoom">
+    <button id="zoomOut" title="Zoom out — show more days" aria-label="Zoom out">−</button>
+    <button id="zoomFit" title="Fit the whole timeline">Fit</button>
+    <button id="zoomIn" title="Zoom in — show fewer days" aria-label="Zoom in">+</button>
+  </div>
+  <button id="linkFile" title="Choose the .org file on disk to sync with (e.g. inside your Dropbox folder)">Link file…</button>
+  <button class="primary" id="syncFile" title="Write the current org to the linked file (⌘S / Ctrl+S)">Sync ↑</button>
+  <button class="quiet" id="loadFile" title="Reload from the linked file — e.g. after editing it in Emacs" style="display:none">Load ↓</button>
+</div>
+
+<div class="syncbar" id="syncbar">
+  <span class="dot none" id="syncDot"></span>
+  <span id="syncStatus">Not linked to a file — edits are saved in this browser only.</span>
+</div>
+
+<div class="chart-wrap">
+  <div class="chart-scroll">
+    <div class="chart" id="chart"></div>
+  </div>
+</div>
+
+<div class="editor" id="editor">
+  <div class="fields">
+    <div class="field"><label>Name</label><input type="text" id="edName" /></div>
+    <div class="field" id="edStartField"><label id="edStartLabel">Start</label><input type="date" id="edStart" /></div>
+    <div class="field" id="edEndField"><label>End</label><input type="date" id="edEnd" /></div>
+    <div class="field progress" id="edProgField">
+      <label>Progress</label>
+      <div class="progrow">
+        <input type="range" id="edProg" min="0" max="100" step="5" />
+        <span class="progval" id="edProgVal">0%</span>
+      </div>
+    </div>
+    <div class="groupnote" id="groupNote" style="display:none"></div>
+    <div class="field"><label>&nbsp;</label>
+      <div style="display:flex;gap:8px">
+        <button class="danger" id="edDelete">Delete</button>
+        <button class="quiet" id="edClose">Close</button>
+      </div>
+    </div>
+  </div>
+  <div class="childadd" id="childAdd">
+    <label>Child tasks</label>
+    <div class="addrow">
+      <input type="text" id="childNew" placeholder="Add a child task and press Enter" aria-label="New child task" />
+      <span class="hint" id="childHint"></span>
+    </div>
+  </div>
+</div>
+
+<div class="buffer">
+  <div class="tabbar">
+    <span class="filename" id="bufName">bathroom-renovation.org</span>
+    <div class="tab-actions">
+      <button class="quiet" id="revertBuf" title="Discard text edits and re-render from chart">Revert</button>
+    </div>
+  </div>
+  <textarea id="orgText" spellcheck="false" aria-label="Org-mode source"></textarea>
+  <div class="applybar" id="applybar">
+    <span class="msg" id="applyMsg">Buffer modified — apply to update the chart.</span>
+    <button class="primary" id="applyBuf">Apply changes</button>
+  </div>
+  <div class="modeline">
+    <span><span id="dirtyFlag">--</span>:<span>%%</span>-- <span id="mlName">bathroom-renovation.org</span></span>
+    <span>(Org)&nbsp; <span id="mlStats"></span></span>
+  </div>
+</div>
+
+<p class="footnote">
+  Mapping: phases are top-level headings; each child task is a <code>**</code> heading with its own
+  <code>SCHEDULED:</code> (start) and <code>DEADLINE:</code> (end). The phase heading carries no timestamps —
+  its span, progress, and <code>[2/6]</code> cookie are derived from its children, so it can never drift out of sync.
+  Milestones are headings tagged <code>:milestone:</code> with a <code>DEADLINE:</code>, and work at either level.
+  Keywords flip to <code>DONE</code> at 100%. The file opens cleanly in Emacs: agenda, clocking, and archiving all work.
+</p>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- date helpers (noon UTC to dodge TZ edges) ----------
+  const DAY = 86400000;
+  const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function d(iso) { return new Date(iso + "T12:00:00Z"); }
+  function iso(date) { return date.toISOString().slice(0, 10); }
+  function addDays(isoStr, n) { return iso(new Date(d(isoStr).getTime() + n * DAY)); }
+  function addMonths(isoStr, n) { const dt = d(isoStr); dt.setUTCMonth(dt.getUTCMonth() + n); return iso(dt); }
+  function diffDays(a, b) { return Math.round((d(b) - d(a)) / DAY); }
+  function todayIso() { return iso(new Date(Date.now() - new Date().getTimezoneOffset() * 60000)); }
+  function orgStamp(isoStr) { const dt = d(isoStr); return "<" + isoStr + " " + DOW[dt.getUTCDay()] + ">"; }
+  function fmtShort(isoStr) { const dt = d(isoStr); return MON[dt.getUTCMonth()] + " " + dt.getUTCDate(); }
+
+  // ---------- state ----------
+  let state = null;
+  let selectedId = null;
+  let bufferDirty = false;
+  let MODE = "standalone";          // "server" | "demo" | "standalone" (chosen at boot)
+  let currentProjectId = null;      // server/demo: the .org filename being edited
+  let projects = [];                // server/demo: recent project list
+  const collapsed = new Set();
+  let uid = 1;
+  function nextId() { return "i" + (uid++); }
+
+  function isGroup(it) { return !!(it.children && it.children.length); }
+  function durWeight(it) {
+    return it.type === "milestone" ? 1 : Math.max(1, diffDays(it.start, it.end) + 1);
+  }
+  function effProgress(it) {
+    if (isGroup(it)) {
+      let w = 0, p = 0;
+      for (const c of it.children) { const cw = durWeight(c); w += cw; p += cw * effProgress(c); }
+      return w ? Math.round(p / w) : 0;
+    }
+    if (it.subs && it.subs.length) {
+      const done = it.subs.filter((s) => s.done).length;
+      return Math.round((done / it.subs.length) * 100);
+    }
+    return it.progress || 0;
+  }
+  function childCookie(it) {
+    const done = it.children.filter((c) => effProgress(c) >= 100).length;
+    return done + "/" + it.children.length;
+  }
+  function syncGroups() {
+    for (const it of state.items) {
+      if (!isGroup(it)) continue;
+      let lo = null, hi = null;
+      for (const c of it.children) {
+        if (!lo || d(c.start) < d(lo)) lo = c.start;
+        if (!hi || d(c.end) > d(hi)) hi = c.end;
+      }
+      it.start = lo; it.end = hi;
+      it.progress = effProgress(it);
+    }
+  }
+  function leaves() {
+    const out = [];
+    for (const it of state.items) {
+      if (isGroup(it)) out.push(...it.children);
+      else out.push(it);
+    }
+    return out;
+  }
+
+  function defaultState() {
+    const t = todayIso();
+    function task(name, s, e, extra) {
+      return Object.assign({ id: nextId(), type: "task", name, start: s, end: e, progress: 0, subs: [], children: [] }, extra || {});
+    }
+    function ms(name, day) {
+      return { id: nextId(), type: "milestone", name, start: day, end: day, progress: 0, subs: [], children: [] };
+    }
+    const tile = task("Tile shower & floor", null, null);
+    tile.children = [
+      task("Install waterproofing membrane", addDays(t, 15), addDays(t, 16)),
+      task("Plan tile layout", addDays(t, 17), addDays(t, 17)),
+      task("Cut & tile back wall", addDays(t, 18), addDays(t, 19)),
+      task("Cut & tile niche wall", addDays(t, 20), addDays(t, 21)),
+      task("Tile floor", addDays(t, 22), addDays(t, 23)),
+      task("Grout & seal", addDays(t, 24), addDays(t, 24)),
+    ];
+    return {
+      title: "Bathroom Renovation",
+      targetDate: addDays(t, 42),
+      items: [
+        task("Demo & tear-out", t, addDays(t, 3)),
+        task("Rough plumbing", addDays(t, 4), addDays(t, 8)),
+        task("Electrical rough-in", addDays(t, 6), addDays(t, 9)),
+        ms("Rough-in inspection", addDays(t, 10)),
+        task("Cement board & waterproofing", addDays(t, 11), addDays(t, 14)),
+        tile,
+        task("Vanity, toilet & fixtures", addDays(t, 25), addDays(t, 29)),
+        task("Paint & trim", addDays(t, 30), addDays(t, 33)),
+        ms("Final inspection", addDays(t, 35)),
+      ],
+    };
+  }
+
+  // ---------- org serialization ----------
+  function slugify(s) {
+    return (s || "project").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "project";
+  }
+
+  function emitLeaf(lines, it, stars) {
+    const ep = effProgress(it);
+    const kw = ep >= 100 ? "DONE" : "TODO";
+    const tag = it.type === "milestone" ? "  :milestone:" : "";
+    const hasSubs = it.subs && it.subs.length;
+    const cookie = hasSubs ? " [" + it.subs.filter((s) => s.done).length + "/" + it.subs.length + "]" : "";
+    lines.push(stars + " " + kw + " " + it.name + cookie + tag);
+    if (it.type === "milestone") {
+      lines.push("DEADLINE: " + orgStamp(it.start));
+    } else {
+      lines.push("SCHEDULED: " + orgStamp(it.start) + " DEADLINE: " + orgStamp(it.end));
+      if (hasSubs) {
+        for (const s of it.subs) lines.push("- [" + (s.done ? "X" : " ") + "] " + s.text);
+      } else {
+        lines.push(":PROPERTIES:");
+        lines.push(":PROGRESS: " + (it.progress || 0));
+        lines.push(":END:");
+      }
+    }
+  }
+
+  function serialize(st) {
+    const lines = [];
+    lines.push("#+TITLE: " + st.title);
+    if (st.targetDate) lines.push("#+TARGET_DATE: " + orgStamp(st.targetDate));
+    lines.push("#+TODO: TODO | DONE");
+    lines.push("");
+    for (const it of st.items) {
+      if (isGroup(it)) {
+        const kw = effProgress(it) >= 100 ? "DONE" : "TODO";
+        lines.push("* " + kw + " " + it.name + " [" + childCookie(it) + "]");
+        for (const c of it.children) emitLeaf(lines, c, "**");
+      } else {
+        emitLeaf(lines, it, "*");
+      }
+    }
+    return lines.join("\n") + "\n";
+  }
+
+  function parseOrg(text) {
+    const st = { title: "Untitled project", targetDate: null, items: [] };
+    const lines = text.split(/\r?\n/);
+    let cur = null;       // heading currently receiving metadata lines
+    let curTop = null;    // current top-level item (potential parent)
+    const stampRe = /<(\d{4}-\d{2}-\d{2})[^>]*>/;
+
+    for (const raw of lines) {
+      const line = raw.trim();
+      let m;
+      if ((m = line.match(/^#\+TITLE:\s*(.+)$/i))) { st.title = m[1].trim(); continue; }
+      if ((m = line.match(/^#\+TARGET_DATE:\s*(.+)$/i))) {
+        const s = m[1].match(stampRe); if (s) st.targetDate = s[1]; continue;
+      }
+      if ((m = line.match(/^(\*+)\s+(?:(TODO|DONE|NEXT|WAIT|WAITING|CANCELLED)\s+)?(.*)$/))) {
+        const level = m[1].length;
+        const kw = m[2] || null;
+        let title = m[3].trim();
+        let isMilestone = false;
+        const tagm = title.match(/^(.*?)\s+(:[A-Za-z0-9_@:]+:)\s*$/);
+        if (tagm) {
+          title = tagm[1].trim();
+          isMilestone = tagm[2].toLowerCase().includes(":milestone:");
+        }
+        title = title.replace(/\s*\[\d*(?:%|\/\d*)\]\s*$/, "").trim();
+        const item = {
+          id: nextId(), type: isMilestone ? "milestone" : "task",
+          name: title || "(untitled)", start: null, end: null,
+          progress: kw === "DONE" ? 100 : 0, subs: [], children: [],
+        };
+        if (level === 1 || !curTop) {
+          st.items.push(item);
+          curTop = item;
+        } else {
+          curTop.children.push(item);   // levels 2+ all become children of the current top heading
+        }
+        cur = item;
+        continue;
+      }
+      if (!cur) continue;
+      const cb = line.match(/^[-+]\s+\[( |X|x|-)\]\s*(.*)$/);
+      if (cb) { cur.subs.push({ text: cb[2].trim() || "(untitled)", done: /x/i.test(cb[1]) }); continue; }
+      const sched = line.match(/SCHEDULED:\s*<(\d{4}-\d{2}-\d{2})[^>]*>/);
+      const dead = line.match(/DEADLINE:\s*<(\d{4}-\d{2}-\d{2})[^>]*>/);
+      if (sched) cur.start = sched[1];
+      if (dead) cur.end = dead[1];
+      if ((m = line.match(/^:PROGRESS:\s*(\d+)/i))) {
+        cur.progress = Math.max(0, Math.min(100, parseInt(m[1], 10)));
+      }
+    }
+
+    const t = todayIso();
+    function normLeaf(it) {
+      if (it.type === "milestone") {
+        it.start = it.end = it.end || it.start || t;
+      } else {
+        it.start = it.start || it.end || t;
+        it.end = it.end || it.start;
+        if (d(it.end) < d(it.start)) { const tmp = it.start; it.start = it.end; it.end = tmp; }
+        if (it.subs.length) it.progress = effProgress(it);
+        if (it.progress >= 100) it.progress = 100;
+      }
+    }
+    for (const it of st.items) {
+      if (it.children.length) {
+        it.type = "task";
+        for (const c of it.children) normLeaf(c);
+      } else {
+        normLeaf(it);
+      }
+    }
+    if (!st.items.length) throw new Error("No headings found — expected lines starting with '* TODO …'");
+    return st;
+  }
+
+  // ---------- persistence ----------
+  // Two layers, by design:
+  //   1. localStorage — immediate, automatic, per-browser. Written on every edit so
+  //      nothing is lost on refresh/crash. This is the "working copy".
+  //   2. A real .org file on disk (File System Access API) — the durable database.
+  //      Linked once via a picker (point it at your Dropbox folder); the Sync button
+  //      writes to it, and the handle is remembered across sessions in IndexedDB.
+  //      Emacs and the browser then edit the exact same file.
+  const STORAGE_KEY = "org-gantt-doc";
+  const FS_OK = typeof window.showSaveFilePicker === "function";
+
+  let fileHandle = null;    // FileSystemFileHandle, or null when unlinked
+  let fileDirty = false;    // localStorage is ahead of the on-disk file
+  let lastSyncText = null;  // last text we know is on disk (for drift detection)
+
+  // -- layer 1: localStorage (immediate working cache; per-project in server mode) --
+  function lsKey() { return STORAGE_KEY + (currentProjectId ? ":" + currentProjectId : ""); }
+  function saveStorage() {
+    try { localStorage.setItem(lsKey(), serialize(state)); } catch (e) { /* quota / private mode */ }
+    if (MODE === "server") { scheduleServerSave(); }         // durable copy → the .org file on disk
+    else if (MODE === "standalone") { fileDirty = true; updateSyncBar(); }
+    // demo: localStorage only — never persisted to the host
+  }
+  function loadStorage() {
+    try {
+      const v = localStorage.getItem(lsKey());
+      if (v) return parseOrg(v);
+    } catch (e) { /* no saved doc, or unparseable */ }
+    return null;
+  }
+
+  // -- tiny IndexedDB key/value, only to remember the file handle across sessions --
+  function idb(mode, fn) {
+    return new Promise((resolve, reject) => {
+      const open = indexedDB.open("org-gantt", 1);
+      open.onupgradeneeded = () => open.result.createObjectStore("kv");
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const tx = open.result.transaction("kv", mode);
+        const req = fn(tx.objectStore("kv"));
+        tx.oncomplete = () => resolve(req && req.result);
+        tx.onerror = () => reject(tx.error);
+      };
+    });
+  }
+  const idbGet = (k) => idb("readonly", (s) => s.get(k));
+  const idbSet = (k, v) => idb("readwrite", (s) => s.put(v, k));
+
+  async function ensurePermission(handle, mode) {
+    const opts = { mode };
+    if ((await handle.queryPermission(opts)) === "granted") return true;
+    return (await handle.requestPermission(opts)) === "granted";
+  }
+  async function writeFile() {
+    const w = await fileHandle.createWritable();
+    await w.write(serialize(state));
+    await w.close();
+  }
+  function nowClock() {
+    const dt = new Date();
+    return String(dt.getHours()).padStart(2, "0") + ":" + String(dt.getMinutes()).padStart(2, "0");
+  }
+
+  // -- layer 2: the linked .org file on disk --
+  function adoptText(text) {   // replace state from external text, without re-marking dirty
+    state = parseOrg(text);
+    lastSyncText = text;
+    fileDirty = false;
+    bufferDirty = false;
+    selectedId = null;
+    editorEl.classList.remove("open");
+    try { localStorage.setItem(lsKey(), text); } catch (_) {}
+    render();
+  }
+
+  async function linkFile() {
+    if (!FS_OK) return;
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: slugify(state.title) + ".org",
+        types: [{ description: "Org file", accept: { "text/plain": [".org", ".txt"] } }],
+      });
+    } catch (e) { if (e.name !== "AbortError") console.warn("linkFile:", e); return; }
+    fileHandle = handle;
+    try { await idbSet("handle", handle); } catch (_) {}
+    // If the chosen file already has org content, never silently clobber it —
+    // offer to load it into the chart instead.
+    let existing = "";
+    try { existing = await (await handle.getFile()).text(); } catch (_) {}
+    if (existing.trim()) {
+      const load = confirm('"' + handle.name + '" already has content.\n\n' +
+        "OK = load it into the chart.\nCancel = overwrite it with the current chart.");
+      if (load) {
+        try { adoptText(existing); updateSyncBar("Loaded " + handle.name + " " + nowClock()); return; }
+        catch (e) { alert("Couldn't parse that as org:\n" + e.message + "\n\nIt will be overwritten on the next Sync."); }
+      }
+    }
+    try {
+      await writeFile();
+      lastSyncText = serialize(state);
+      fileDirty = false;
+      updateSyncBar("Linked " + handle.name + " " + nowClock());
+    } catch (e) { updateSyncBar("Link failed: " + e.message); }
+  }
+
+  async function syncToFile() {
+    if (!FS_OK) return;
+    if (!fileHandle) return linkFile();
+    if (!(await ensurePermission(fileHandle, "readwrite"))) { updateSyncBar("Permission denied."); return; }
+    try {
+      // Guard against clobbering external (Emacs) edits made since our last sync.
+      const disk = await (await fileHandle.getFile()).text();
+      const mine = serialize(state);
+      if (lastSyncText != null && disk !== lastSyncText && disk !== mine) {
+        const ok = confirm("The file on disk changed since the last sync (edited in Emacs?).\n\n" +
+          "OK = overwrite disk with the chart here.\nCancel = keep the disk version (use Load ↓ to pull it in).");
+        if (!ok) { updateSyncBar("Sync cancelled — disk is newer, use Load ↓"); return; }
+      }
+      await writeFile();
+      lastSyncText = mine;
+      fileDirty = false;
+      updateSyncBar("Synced " + nowClock());
+    } catch (e) { updateSyncBar("Sync failed: " + e.message); }
+  }
+
+  async function loadFromFile() {
+    if (!fileHandle) return;
+    if (!(await ensurePermission(fileHandle, "read"))) { updateSyncBar("Permission denied."); return; }
+    try {
+      const text = await (await fileHandle.getFile()).text();
+      adoptText(text);
+      updateSyncBar("Loaded from disk " + nowClock());
+    } catch (e) { updateSyncBar("Load failed: " + e.message); }
+  }
+
+  async function restoreHandle() {
+    if (!FS_OK) return;
+    try {
+      const handle = await idbGet("handle");
+      if (!handle) { updateSyncBar(); return; }
+      fileHandle = handle;
+      // Don't force a permission prompt on load (no user gesture yet). If we still
+      // have read access, compare disk vs local so we can flag drift non-destructively.
+      if ((await handle.queryPermission({ mode: "readwrite" })) === "granted") {
+        try {
+          const disk = await (await handle.getFile()).text();
+          lastSyncText = disk;
+          fileDirty = disk !== serialize(state);
+        } catch (_) {}
+      }
+      updateSyncBar();
+    } catch (e) { console.warn("restoreHandle:", e); }
+  }
+
+  function updateSyncBar(msg) {
+    const dot = document.getElementById("syncDot");
+    const status = document.getElementById("syncStatus");
+    const linkBtn = document.getElementById("linkFile");
+    const syncBtn = document.getElementById("syncFile");
+    const loadBtn = document.getElementById("loadFile");
+    if (!dot) return;
+    if (!FS_OK) {
+      // Browser didn't expose the File System Access API. Keep the buttons visible
+      // but disabled with a tooltip, so it's obvious the feature exists and why it's off.
+      const why = "Your browser didn't expose showSaveFilePicker (the File System Access API). " +
+        "Use Chrome, Edge, or Brave in a normal (non-private) window. Download .org still works meanwhile.";
+      linkBtn.disabled = syncBtn.disabled = true;
+      linkBtn.title = syncBtn.title = why;
+      linkBtn.style.display = syncBtn.style.display = "";
+      loadBtn.style.display = "none";
+      dot.className = "dot none";
+      status.textContent = "File sync unavailable in this browser — use Download .org. (Hover Link file… for why.)";
+      return;
+    }
+    linkBtn.disabled = syncBtn.disabled = false;
+    linkBtn.title = "Choose the .org file on disk to sync with (e.g. inside your Dropbox folder)";
+    syncBtn.title = "Write the current org to the linked file (⌘S / Ctrl+S)";
+    loadBtn.style.display = fileHandle ? "" : "none";
+    linkBtn.textContent = fileHandle ? "Relink…" : "Link file…";
+    dot.className = "dot " + (!fileHandle ? "none" : fileDirty ? "dirty" : "ok");
+    if (msg) { status.innerHTML = msg; return; }
+    if (!fileHandle) { status.textContent = "Not linked to a file — edits are saved in this browser only."; }
+    else {
+      status.innerHTML = 'Linked: <span class="fname">' + fileHandle.name + "</span> · " +
+        (fileDirty ? "unsynced changes — click Sync ↑" : "in sync");
+    }
+  }
+
+  // ---------- backend (server / demo modes) ----------
+  const api = {
+    config: () => fetch("/api/config", { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject())),
+    list:   () => fetch("/api/projects").then((r) => r.json()),
+    get:    (id) => fetch("/api/projects/" + encodeURIComponent(id)).then((r) => (r.ok ? r.json() : Promise.reject(new Error("load failed")))),
+    save:   (id, text) => fetch("/api/projects/" + encodeURIComponent(id), {
+              method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }),
+            }).then((r) => (r.ok ? r.json() : Promise.reject(new Error("save failed")))),
+    create: (name) => fetch("/api/projects", {
+              method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+            }).then((r) => r.json()),
+    del:    (id) => fetch("/api/projects/" + encodeURIComponent(id), { method: "DELETE" }).then((r) => r.json()),
+  };
+
+  let saveTimer = null;
+  function scheduleServerSave() {
+    setSaveStatus("dirty");
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flushServerSave, 500);
+  }
+  async function flushServerSave() {
+    if (MODE !== "server" || !currentProjectId) return;
+    setSaveStatus("saving");
+    try { await api.save(currentProjectId, serialize(state)); setSaveStatus("saved"); }
+    catch (e) { setSaveStatus("error"); }
+  }
+  function setSaveStatus(kind) {
+    const el = document.getElementById("saveStatus");
+    if (!el) return;
+    const label = { dirty: "● unsaved", saving: "saving…", saved: "✓ saved", error: "⚠ save failed — retries on next edit" };
+    el.textContent = MODE === "demo" ? "" : (label[kind] || "");
+    el.className = "savestatus " + (kind || "");
+  }
+
+  function fmtWhen(recent) {
+    if (!recent) return "";
+    const secs = Date.now() / 1000 - recent;
+    if (secs < 60) return "just now";
+    if (secs < 3600) return Math.floor(secs / 60) + "m ago";
+    if (secs < 86400) return Math.floor(secs / 3600) + "h ago";
+    return Math.floor(secs / 86400) + "d ago";
+  }
+
+  async function loadProjectList() {
+    try { projects = await api.list(); } catch (e) { projects = []; }
+    renderProjectMenu();
+  }
+  function renderProjectMenu() {
+    const list = document.getElementById("projList");
+    if (!list) return;
+    list.innerHTML = "";
+    projects.forEach((p) => {
+      const row = document.createElement("div");
+      row.className = "projrow" + (p.id === currentProjectId ? " current" : "");
+      const pick = document.createElement("button");
+      pick.className = "projpick"; pick.setAttribute("role", "menuitem");
+      pick.innerHTML = '<span class="pname"></span><span class="pwhen"></span>';
+      pick.querySelector(".pname").textContent = p.name;
+      pick.querySelector(".pwhen").textContent = fmtWhen(p.recent);
+      pick.addEventListener("click", () => { closeProjectMenu(); openProject(p.id); });
+      row.appendChild(pick);
+      if (MODE === "server") {
+        const del = document.createElement("button");
+        del.className = "projdel"; del.textContent = "✕";
+        del.title = "Delete project"; del.setAttribute("aria-label", "Delete " + p.name);
+        del.addEventListener("click", (e) => { e.stopPropagation(); deleteProject(p.id, p.name); });
+        row.appendChild(del);
+      }
+      list.appendChild(row);
+    });
+  }
+  function updateProjectButton() {
+    const cur = document.getElementById("projCurrent");
+    if (cur) cur.textContent = (state && state.title) || "Projects";
+  }
+  function openProjectMenu()  { const m = document.getElementById("projMenu"); if (m) { m.hidden = false; document.getElementById("projMenuBtn").setAttribute("aria-expanded", "true"); } }
+  function closeProjectMenu() { const m = document.getElementById("projMenu"); if (m) { m.hidden = true; document.getElementById("projMenuBtn").setAttribute("aria-expanded", "false"); } }
+  function toggleProjectMenu(){ const m = document.getElementById("projMenu"); if (m && m.hidden) openProjectMenu(); else closeProjectMenu(); }
+
+  async function openProject(id) {
+    let data;
+    try { data = await api.get(id); } catch (e) { setSaveStatus("error"); return; }
+    currentProjectId = id;
+    try { state = parseOrg(data.text); } catch (e) { state = defaultState(); }
+    bufferDirty = false; selectedId = null;
+    editorEl.classList.remove("open");
+    try { localStorage.setItem(lsKey(), data.text); } catch (_) {}
+    try { localStorage.setItem("org-gantt-last", id); } catch (_) {}
+    render();
+    scrollToToday();
+    updateProjectButton();
+    setSaveStatus("saved");
+    await loadProjectList();
+  }
+
+  async function newProject() {
+    const name = prompt("New project name:", "Untitled project");
+    if (name === null) return;
+    closeProjectMenu();
+    if (MODE === "demo") {   // demo never persists — just start a fresh local doc
+      currentProjectId = null;
+      state = defaultState(); state.title = name || "Untitled project";
+      render(); updateProjectButton();
+      return;
+    }
+    try { const p = await api.create(name || "Untitled project"); await openProject(p.id); }
+    catch (e) { setSaveStatus("error"); }
+  }
+
+  async function deleteProject(id, name) {
+    if (!confirm('Delete "' + (name || id) + '"?\nThis removes the .org file from disk.')) return;
+    try { await api.del(id); } catch (e) { setSaveStatus("error"); return; }
+    if (id === currentProjectId) {
+      currentProjectId = null;
+      await loadProjectList();
+      if (projects.length) { await openProject(projects[0].id); }
+      else { state = defaultState(); render(); updateProjectButton(); }
+    } else {
+      await loadProjectList();
+    }
+  }
+
+  function setupServerUI(cfg) {
+    document.getElementById("projectbar").style.display = "";
+    document.getElementById("syncbar").style.display = "none";      // server owns persistence
+    ["linkFile", "syncFile", "loadFile"].forEach((id) => {
+      const b = document.getElementById(id); if (b) b.style.display = "none";
+    });
+    document.getElementById("demoFlag").hidden = !cfg.demo;
+    document.getElementById("projMenuBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleProjectMenu(); });
+    document.getElementById("projNew").addEventListener("click", newProject);
+    document.addEventListener("click", (e) => {
+      const menu = document.getElementById("projMenu");
+      if (menu && !menu.hidden && !menu.parentNode.contains(e.target)) closeProjectMenu();
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeProjectMenu(); });
+  }
+
+  // ---------- range ----------
+  function chartRange() {
+    const t = todayIso();
+    // Span = earliest → latest date in the file, then padded 1 month on each side so
+    // there's always runway to scroll into. Based on the file's own dates (+ target).
+    let lo = null, hi = null;
+    for (const it of leaves()) {
+      if (!lo || d(it.start) < d(lo)) lo = it.start;
+      if (!hi || d(it.end) > d(hi)) hi = it.end;
+    }
+    if (state.targetDate && (!hi || d(state.targetDate) > d(hi))) hi = state.targetDate;
+    if (!lo) lo = t;
+    if (!hi) hi = t;
+    lo = addMonths(lo, -1);
+    hi = addMonths(hi, 1);
+    const back = (d(lo).getUTCDay() + 6) % 7;   // snap start to Monday
+    lo = addDays(lo, -back);
+    return { lo, hi, days: diffDays(lo, hi) + 1 };
+  }
+
+  // ---------- rendering ----------
+  const chartEl = document.getElementById("chart");
+  let dayW = 26;              // px per day (the zoom level)
+  let fitMode = false;        // true → recompute dayW each render to fit the whole span
+  const ZOOM_MIN = 6, ZOOM_MAX = 64;
+
+  function visibleRows() {
+    const rows = [];
+    for (const it of state.items) {
+      rows.push({ it, depth: 0 });
+      if (isGroup(it) && !collapsed.has(it.id)) {
+        for (const c of it.children) rows.push({ it: c, depth: 1, parent: it });
+      }
+    }
+    return rows;
+  }
+
+  function render() {
+    syncGroups();
+    renderHeader();
+    renderChart();
+    renderBuffer();
+  }
+
+  // ---------- zoom & scroll ----------
+  function scroller() { return document.querySelector(".chart-scroll"); }
+  function setZoom(newW, keepCenter) {
+    const box = scroller();
+    const centerDay = keepCenter ? (box.scrollLeft + box.clientWidth / 2) / dayW : 0;
+    fitMode = false;
+    dayW = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(newW)));
+    renderChart();
+    if (keepCenter) box.scrollLeft = Math.max(0, centerDay * dayW - box.clientWidth / 2);
+  }
+  function zoomIn()  { setZoom(dayW * 1.3, true); }
+  function zoomOut() { setZoom(dayW / 1.3, true); }
+  function zoomFit() { fitMode = true; renderChart(); scroller().scrollLeft = 0; }
+  function scrollToToday() {
+    // Deferred a frame: on boot the container hasn't been laid out yet, so
+    // clientWidth reads 0 and the "keep some past in view" offset would be lost.
+    requestAnimationFrame(() => {
+      const box = scroller();
+      const { lo } = chartRange();
+      const x = diffDays(lo, todayIso()) * dayW;
+      box.scrollLeft = Math.max(0, x - box.clientWidth * 0.3);
+    });
+  }
+
+  function renderHeader() {
+    document.getElementById("projectTitle").value = state.title;
+    document.getElementById("targetDate").value = state.targetDate || "";
+    const cd = document.getElementById("countdown");
+    if (state.targetDate) {
+      const n = diffDays(todayIso(), state.targetDate);
+      cd.textContent = n >= 0 ? n + "d" : Math.abs(n) + "d over";
+      cd.classList.toggle("late", n < 0);
+    } else cd.textContent = "—";
+
+    let wsum = 0, psum = 0;
+    for (const it of leaves()) {
+      const w = durWeight(it);
+      wsum += w; psum += w * effProgress(it);
+    }
+    document.getElementById("overall").textContent = wsum ? Math.round(psum / wsum) + "%" : "0%";
+    if (MODE !== "standalone") updateProjectButton();
+  }
+
+  function renderChart() {
+    const { lo, days } = chartRange();
+    const container = document.querySelector(".chart-scroll");
+    const avail = container.clientWidth || 900;
+    if (fitMode) dayW = Math.max(ZOOM_MIN, Math.min(40, Math.floor(avail / days)));
+    const width = days * dayW;
+    const rows = visibleRows();
+
+    chartEl.style.width = width + "px";
+    chartEl.innerHTML = "";
+
+    if (!rows.length) {
+      chartEl.innerHTML = '<div class="empty-hint">No tasks yet — add one above, or paste an org file into the buffer below.</div>';
+      return;
+    }
+
+    const AXIS_H = 52;
+    const totalH = AXIS_H + rows.length * 44;
+
+    // per-day columns: one shaded column per day (alternating stripes; weekends darker).
+    // When zoomed far out ("dense"), drop per-day borders and mark weeks with Monday lines.
+    const dense = dayW < 12;
+    const grid = document.createElement("div");
+    grid.className = "gridlayer" + (dense ? " dense" : "");
+    grid.style.height = totalH + "px";
+    for (let i = 0; i < days; i++) {
+      const wd = d(addDays(lo, i)).getUTCDay();
+      const weekend = wd === 0 || wd === 6;
+      const col = document.createElement("div");
+      col.className = "daycol" + (weekend ? " weekend" : (i % 2 ? " odd" : ""));
+      col.style.left = (i * dayW) + "px";
+      col.style.width = dayW + "px";
+      grid.appendChild(col);
+      if (dense && wd === 1 && i > 0) {
+        const wk = document.createElement("div");
+        wk.className = "wkline"; wk.style.left = (i * dayW) + "px";
+        grid.appendChild(wk);
+      }
+    }
+    chartEl.appendChild(grid);
+
+    // axis: month labels + day numbers (every day when there's room, else Mondays only)
+    const perDay = dayW >= 18;
+    const axis = document.createElement("div");
+    axis.className = "axis";
+    let lastMonth = -1;
+    for (let i = 0; i < days; i++) {
+      const dt = d(addDays(lo, i));
+      const wd = dt.getUTCDay();
+      if (dt.getUTCMonth() !== lastMonth && dt.getUTCDate() <= 28) {
+        lastMonth = dt.getUTCMonth();
+        const ml = document.createElement("div");
+        ml.className = "month-lab"; ml.style.left = (i * dayW + 3) + "px";
+        ml.textContent = MON[dt.getUTCMonth()] + " " + dt.getUTCFullYear();
+        axis.appendChild(ml);
+      }
+      if (!perDay && wd !== 1) continue;          // zoomed out: label Mondays only
+      const dc = document.createElement("div");
+      dc.className = "daynum" + (perDay ? "" : " wk") + (wd === 0 || wd === 6 ? " weekend" : "");
+      dc.style.left = (i * dayW) + "px";
+      if (perDay) dc.style.width = dayW + "px";
+      dc.innerHTML = perDay
+        ? '<span class="wd">' + DOW[wd][0] + '</span><span class="dn">' + dt.getUTCDate() + "</span>"
+        : '<span class="dn">' + dt.getUTCDate() + "</span>";
+      axis.appendChild(dc);
+    }
+    chartEl.appendChild(axis);
+
+    // rows
+    rows.forEach(({ it, depth }) => {
+      const group = isGroup(it);
+      const row = document.createElement("div");
+      row.className = "row" + (depth ? " child" : "") + (group ? " grouprow" : "") +
+        (it.id === selectedId ? " selected" : "");
+      row.dataset.id = it.id;
+
+      if (group) {
+        const x = diffDays(lo, it.start) * dayW;
+        const w = Math.max(dayW, (diffDays(it.start, it.end) + 1) * dayW - 2);
+        const ep = effProgress(it);
+        const gb = document.createElement("div");
+        gb.className = "groupbar" + (ep >= 100 ? " done100" : "");
+        gb.style.left = x + "px"; gb.style.width = w + "px";
+        gb.setAttribute("role", "button");
+        gb.setAttribute("tabindex", "0");
+        gb.setAttribute("aria-label", "Phase: " + it.name + ", " + fmtShort(it.start) + " to " + fmtShort(it.end) + ", " + ep + "% done");
+        const gf = document.createElement("div");
+        gf.className = "gfill"; gf.style.width = ep + "%";
+        gb.appendChild(gf);
+        const gt = document.createElement("div");
+        gt.className = "gtag"; gt.textContent = childCookie(it);
+        gb.appendChild(gt);
+        attachDrag(gb, it);
+        row.appendChild(gb);
+      } else if (it.type === "task") {
+        const x = diffDays(lo, it.start) * dayW;
+        const w = Math.max(dayW * 0.6, (diffDays(it.start, it.end) + 1) * dayW - 2);
+        const ep = effProgress(it);
+        const bar = document.createElement("div");
+        bar.className = "bar" + (ep >= 100 ? " done100" : "");
+        bar.style.left = x + "px"; bar.style.width = w + "px";
+        bar.setAttribute("role", "button");
+        bar.setAttribute("tabindex", "0");
+        bar.setAttribute("aria-label", it.name + ", " + fmtShort(it.start) + " to " + fmtShort(it.end) + ", " + ep + "% done");
+        const fill = document.createElement("div");
+        fill.className = "fill"; fill.style.width = ep + "%";
+        bar.appendChild(fill);
+        const pct = document.createElement("span");
+        pct.className = "pct";
+        pct.textContent = (it.subs && it.subs.length)
+          ? it.subs.filter((s) => s.done).length + "/" + it.subs.length
+          : ep + "%";
+        bar.appendChild(pct);
+        const handle = document.createElement("div");
+        handle.className = "handle"; handle.dataset.resize = "1";
+        bar.appendChild(handle);
+        attachDrag(bar, it);
+        row.appendChild(bar);
+      } else {
+        const x = diffDays(lo, it.start) * dayW + dayW / 2 - 10;
+        const msEl = document.createElement("div");
+        msEl.className = "milestone" + (effProgress(it) >= 100 ? " done" : "");
+        msEl.style.left = x + "px";
+        msEl.setAttribute("role", "button");
+        msEl.setAttribute("tabindex", "0");
+        msEl.setAttribute("aria-label", "Milestone: " + it.name + ", " + fmtShort(it.start));
+        msEl.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20"><polygon points="10,1 19,10 10,19 1,10" fill="#E5731F"/></svg>';
+        attachDrag(msEl, it);
+        row.appendChild(msEl);
+      }
+
+      const label = document.createElement("span");
+      label.className = "rowlabel";
+      if (group) {
+        const tog = document.createElement("button");
+        tog.className = "toggle";
+        tog.textContent = collapsed.has(it.id) ? "▸" : "▾";
+        tog.setAttribute("aria-label", (collapsed.has(it.id) ? "Expand " : "Collapse ") + it.name);
+        tog.setAttribute("aria-expanded", String(!collapsed.has(it.id)));
+        tog.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (collapsed.has(it.id)) collapsed.delete(it.id); else collapsed.add(it.id);
+          renderChart();
+        });
+        label.appendChild(tog);
+      }
+      label.appendChild(document.createTextNode(it.name));
+      row.appendChild(label);
+
+      row.addEventListener("click", () => {
+        if (dragMoved) return;
+        openEditor(it.id);
+      });
+      chartEl.appendChild(row);
+    });
+
+    addMarker(lo, todayIso(), "today", "today", totalH);
+    if (state.targetDate) addMarker(lo, state.targetDate, "target", "target " + fmtShort(state.targetDate), totalH);
+  }
+
+  function addMarker(lo, dateIso, cls, text, totalH) {
+    const i = diffDays(lo, dateIso);
+    const { days } = chartRange();
+    if (i < 0 || i > days) return;
+    const mk = document.createElement("div");
+    mk.className = "marker " + cls;
+    mk.style.left = (i * dayW + (cls === "today" ? dayW / 2 : dayW)) + "px";
+    mk.innerHTML = '<div class="line"></div><div class="tag">' + text + "</div>";
+    mk.style.height = totalH + "px";
+    chartEl.appendChild(mk);
+  }
+
+  // ---------- drag ----------
+  let dragMoved = false;
+  function attachDrag(el, it) {
+    el.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      // Move/up are bound to window (below) so a mid-drag re-render — which destroys
+      // this bar element — can't sever the drag. No pointer capture needed.
+      const resizing = ev.target.dataset && ev.target.dataset.resize;
+      const startX = ev.clientX, startY = ev.clientY;
+      const group = isGroup(it);
+      const origStart = it.start, origEnd = it.end;
+      const origChildren = group ? it.children.map((c) => ({ c, s: c.start, e: c.end })) : null;
+      dragMoved = false;
+
+      // A drag on the bar is EITHER a horizontal reschedule/resize OR a vertical
+      // reorder. The axis is locked in once, from the first few px of movement.
+      let mode = resizing ? "resize" : null;      // "resize" | "reschedule" | "reorder"
+      const rowEl = el.closest(".row");
+      const parent = findItem(it.id).parent;
+      const listArr = parent ? parent.children : state.items;   // reorder within siblings
+      let sibs = null, dropLine = null, targetIndex = listArr.indexOf(it);
+
+      function beginReorder() {
+        mode = "reorder";
+        if (rowEl) rowEl.classList.add("reordering");
+        sibs = listArr
+          .map((s) => ({ item: s, el: chartEl.querySelector('.row[data-id="' + s.id + '"]') }))
+          .filter((s) => s.el);
+        dropLine = document.createElement("div");
+        dropLine.className = "dropline";
+        chartEl.appendChild(dropLine);
+      }
+      function placeDrop(clientY) {
+        let idx = 0;
+        for (const s of sibs) {
+          const r = s.el.getBoundingClientRect();
+          if (clientY > r.top + r.height / 2) idx++;
+        }
+        targetIndex = idx;
+        const at = idx < sibs.length
+          ? sibs[idx].el.offsetTop
+          : sibs[sibs.length - 1].el.offsetTop + sibs[sibs.length - 1].el.offsetHeight;
+        dropLine.style.top = at + "px";
+      }
+
+      function onMove(e) {
+        const dx = e.clientX - startX, dy = e.clientY - startY;
+        if (mode === null) {                          // decide axis once, past a jitter threshold
+          if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+          if (Math.abs(dy) > Math.abs(dx) && listArr.length > 1) beginReorder();
+          else mode = "reschedule";
+        }
+        if (mode === "reorder") { dragMoved = true; placeDrop(e.clientY); return; }
+
+        const dxDays = Math.round(dx / dayW);
+        if (dxDays !== 0) dragMoved = true;
+        if (group && mode !== "resize") {
+          for (const o of origChildren) { o.c.start = addDays(o.s, dxDays); o.c.end = addDays(o.e, dxDays); }
+          syncGroups();
+        } else if (mode === "resize" && it.type === "task") {
+          const newEnd = addDays(origEnd, dxDays);
+          it.end = d(newEnd) < d(it.start) ? it.start : newEnd;
+          syncGroups();
+        } else {
+          it.start = addDays(origStart, dxDays);
+          if (it.type === "task") it.end = addDays(origEnd, dxDays);
+          else it.end = it.start;
+          syncGroups();
+        }
+        renderChart(); renderHeader();
+      }
+      function onUp() {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        if (mode === "reorder") {
+          if (dropLine) dropLine.remove();
+          if (rowEl) rowEl.classList.remove("reordering");
+          const from = listArr.indexOf(it);
+          let to = targetIndex;
+          if (to > from) to -= 1;                     // account for the item leaving its slot
+          if (to !== from && to >= 0) {
+            listArr.splice(from, 1);
+            listArr.splice(to, 0, it);
+            render(); saveStorage();                  // rewrites the .org heading order
+          }
+        } else if (dragMoved) {
+          renderBuffer(); saveStorage(); if (selectedId === it.id) fillEditor(it);
+        }
+        setTimeout(() => { dragMoved = false; }, 0);
+      }
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    });
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openEditor(it.id); }
+    });
+  }
+
+  // ---------- item lookup ----------
+  function findItem(id) {
+    for (const it of state.items) {
+      if (it.id === id) return { item: it, parent: null };
+      for (const c of it.children || []) {
+        if (c.id === id) return { item: c, parent: it };
+      }
+    }
+    return { item: null, parent: null };
+  }
+
+  // ---------- editor ----------
+  const editorEl = document.getElementById("editor");
+
+  function openEditor(id) {
+    selectedId = id;
+    const { item } = findItem(id);
+    if (!item) return;
+    editorEl.classList.add("open");
+    fillEditor(item);
+    renderChart();
+    document.getElementById("edName").focus();
+  }
+
+  function fillEditor(it) {
+    const group = isGroup(it);
+    const isMs = it.type === "milestone";
+    const hasSubs = it.subs && it.subs.length;
+    document.getElementById("edName").value = it.name;
+    document.getElementById("edStart").value = it.start || "";
+    document.getElementById("edEnd").value = it.end || "";
+    document.getElementById("edProg").value = effProgress(it);
+    document.getElementById("edProgVal").textContent = effProgress(it) + "%";
+    document.getElementById("edStartField").style.display = group ? "none" : "";
+    document.getElementById("edEndField").style.display = (group || isMs) ? "none" : "";
+    document.getElementById("edProgField").style.display = (group || isMs || hasSubs) ? "none" : "";
+    document.getElementById("edStartLabel").textContent = isMs ? "Date" : "Start";
+    const note = document.getElementById("groupNote");
+    note.style.display = group ? "" : "none";
+    if (group) {
+      note.textContent = fmtShort(it.start) + " → " + fmtShort(it.end) + " · " +
+        effProgress(it) + "% · " + childCookie(it) + " done (derived from children)";
+    }
+    const ca = document.getElementById("childAdd");
+    ca.classList.toggle("show", !isMs);
+    document.getElementById("childHint").textContent = group
+      ? ""
+      : "Adding a child turns this into a phase — its dates and progress will derive from children.";
+  }
+
+  function closeEditor() {
+    selectedId = null;
+    editorEl.classList.remove("open");
+    renderChart();
+  }
+
+  function editorChanged() {
+    const { item: it } = findItem(selectedId);
+    if (!it) return;
+    it.name = document.getElementById("edName").value || "(untitled)";
+    if (!isGroup(it)) {
+      const s = document.getElementById("edStart").value;
+      const e = document.getElementById("edEnd").value;
+      if (s) it.start = s;
+      if (it.type === "milestone") { it.end = it.start; }
+      else if (e) { it.end = d(e) < d(it.start) ? it.start : e; }
+      if (!(it.subs && it.subs.length)) {
+        it.progress = parseInt(document.getElementById("edProg").value, 10) || 0;
+      }
+    }
+    document.getElementById("edProgVal").textContent = effProgress(it) + "%";
+    render(); saveStorage();
+  }
+
+  ["edName", "edStart", "edEnd"].forEach((id) =>
+    document.getElementById(id).addEventListener("change", editorChanged));
+  document.getElementById("edProg").addEventListener("input", editorChanged);
+  document.getElementById("edDelete").addEventListener("click", () => {
+    const { item, parent } = findItem(selectedId);
+    if (!item) return;
+    if (parent) {
+      parent.children = parent.children.filter((c) => c.id !== item.id);
+    } else {
+      state.items = state.items.filter((x) => x.id !== item.id);
+    }
+    closeEditor(); render(); saveStorage();
+  });
+  document.getElementById("edClose").addEventListener("click", closeEditor);
+
+  document.getElementById("childNew").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const { item: it, parent } = findItem(selectedId);
+    if (!it || it.type === "milestone" || parent) return;  // children can't have children (2 levels)
+    const v = e.target.value.trim();
+    if (!v) return;
+    let s, en;
+    if (isGroup(it)) {
+      s = addDays(it.end, 1); en = addDays(s, 1);
+    } else {
+      s = it.start; en = addDays(s, 1);   // first child inherits the parent's start
+    }
+    it.children.push({ id: nextId(), type: "task", name: v, start: s, end: en, progress: 0, subs: [], children: [] });
+    collapsed.delete(it.id);
+    e.target.value = "";
+    render(); saveStorage(); fillEditor(it);
+    document.getElementById("childNew").focus();
+  });
+
+  // ---------- buffer ---------- 
+  const orgTextEl = document.getElementById("orgText");
+  function countHeadings() {
+    let n = 0;
+    for (const it of state.items) { n += 1 + (it.children ? it.children.length : 0); }
+    return n;
+  }
+  function renderBuffer() {
+    if (bufferDirty) return;
+    orgTextEl.value = serialize(state);
+    const name = (MODE !== "standalone" && currentProjectId) ? currentProjectId : slugify(state.title) + ".org";
+    document.getElementById("bufName").textContent = name;
+    document.getElementById("mlName").textContent = name;
+    const n = countHeadings();
+    document.getElementById("mlStats").textContent = n + (n === 1 ? " heading" : " headings");
+    document.getElementById("dirtyFlag").textContent = "--";
+    document.getElementById("dirtyFlag").className = "";
+    document.getElementById("applybar").classList.remove("show");
+    autosize();
+  }
+  function autosize() {
+    orgTextEl.style.height = "auto";
+    orgTextEl.style.height = Math.max(260, orgTextEl.scrollHeight + 4) + "px";
+  }
+  orgTextEl.addEventListener("input", () => {
+    bufferDirty = true;
+    document.getElementById("dirtyFlag").textContent = "**";
+    document.getElementById("dirtyFlag").className = "dirty";
+    document.getElementById("applybar").classList.add("show");
+    const msg = document.getElementById("applyMsg");
+    msg.textContent = "Buffer modified — apply to update the chart.";
+    msg.classList.remove("err");
+    autosize();
+  });
+  document.getElementById("applyBuf").addEventListener("click", () => {
+    try {
+      const st = parseOrg(orgTextEl.value);
+      state = st;
+      bufferDirty = false;
+      selectedId = null;
+      editorEl.classList.remove("open");
+      render(); saveStorage();
+    } catch (e) {
+      const msg = document.getElementById("applyMsg");
+      msg.textContent = "Parse error: " + e.message;
+      msg.classList.add("err");
+    }
+  });
+  document.getElementById("revertBuf").addEventListener("click", () => {
+    bufferDirty = false;
+    renderBuffer();
+  });
+
+  // ---------- toolbar ----------
+  document.getElementById("addTask").addEventListener("click", () => {
+    const t = todayIso();
+    const it = { id: nextId(), type: "task", name: "New task", start: t, end: addDays(t, 4), progress: 0, subs: [], children: [] };
+    state.items.push(it);
+    render(); saveStorage(); openEditor(it.id);
+  });
+  document.getElementById("addGroup").addEventListener("click", () => {
+    const t = todayIso();
+    const child = { id: nextId(), type: "task", name: "First child task", start: t, end: addDays(t, 1), progress: 0, subs: [], children: [] };
+    const it = { id: nextId(), type: "task", name: "New phase", start: null, end: null, progress: 0, subs: [], children: [child] };
+    state.items.push(it);
+    render(); saveStorage(); openEditor(it.id);
+  });
+  document.getElementById("addMilestone").addEventListener("click", () => {
+    const t = addDays(todayIso(), 7);
+    const it = { id: nextId(), type: "milestone", name: "New milestone", start: t, end: t, progress: 0, subs: [], children: [] };
+    state.items.push(it);
+    render(); saveStorage(); openEditor(it.id);
+  });
+  document.getElementById("downloadOrg").addEventListener("click", () => {
+    const blob = new Blob([serialize(state)], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = slugify(state.title) + ".org";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  document.getElementById("copyOrg").addEventListener("click", async (e) => {
+    try {
+      await navigator.clipboard.writeText(serialize(state));
+      e.target.textContent = "Copied ✓";
+      setTimeout(() => (e.target.textContent = "Copy org"), 1200);
+    } catch (_) {
+      orgTextEl.select(); document.execCommand("copy");
+    }
+  });
+
+  document.getElementById("zoomIn").addEventListener("click", zoomIn);
+  document.getElementById("zoomOut").addEventListener("click", zoomOut);
+  document.getElementById("zoomFit").addEventListener("click", zoomFit);
+
+  document.getElementById("linkFile").addEventListener("click", linkFile);
+  document.getElementById("syncFile").addEventListener("click", syncToFile);
+  document.getElementById("loadFile").addEventListener("click", loadFromFile);
+  window.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      syncToFile();
+    }
+  });
+
+  document.getElementById("projectTitle").addEventListener("change", (e) => {
+    state.title = e.target.value || "Untitled project";
+    render(); saveStorage();
+  });
+  document.getElementById("targetDate").addEventListener("change", (e) => {
+    state.targetDate = e.target.value || null;
+    render(); saveStorage();
+  });
+
+  window.addEventListener("resize", () => renderChart());
+
+  // ---------- boot ----------
+  (async function boot() {
+    let cfg = null;
+    try { cfg = await api.config(); } catch (_) { cfg = null; }
+
+    if (cfg) {
+      // Served by the backend: files live on disk (server) or are samples (demo).
+      MODE = cfg.demo ? "demo" : "server";
+      setupServerUI(cfg);
+      await loadProjectList();
+      let openId = null;
+      try { openId = localStorage.getItem("org-gantt-last"); } catch (_) {}
+      if (!projects.find((p) => p.id === openId)) openId = projects[0] && projects[0].id;
+      if (openId) {
+        await openProject(openId);
+      } else if (MODE === "server") {
+        try { const p = await api.create("My first project"); await openProject(p.id); }
+        catch (e) { state = defaultState(); render(); }
+      } else {
+        state = defaultState(); render(); updateProjectButton();
+      }
+      return;
+    }
+
+    // Standalone: opened as a plain file with no backend. localStorage + optional
+    // File System Access API, exactly as before.
+    MODE = "standalone";
+    state = loadStorage() || defaultState();
+    render();
+    scrollToToday();
+    updateSyncBar();
+    await restoreHandle();   // reattach a previously linked file, if any
+  })();
+})();
+</script>
+</body>
+</html>
