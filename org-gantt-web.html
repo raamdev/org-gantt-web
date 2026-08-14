@@ -1467,9 +1467,9 @@
     if (!v) return;
     let s, en;
     if (isGroup(it)) {
-      s = addDays(it.end, 1); en = addDays(s, 1);
+      s = addDays(it.end, 1); en = s;     // new child: 1 day, right after the phase
     } else {
-      s = it.start; en = addDays(s, 1);   // first child inherits the parent's start
+      s = it.start; en = s;               // first child inherits the parent's start, 1 day
     }
     it.children.push({ id: nextId(), type: "task", name: v, start: s, end: en, progress: 0, subs: [], children: [] });
     collapsed.delete(it.id);
@@ -1534,13 +1534,13 @@
   // ---------- toolbar ----------
   document.getElementById("addTask").addEventListener("click", () => {
     const t = todayIso();
-    const it = { id: nextId(), type: "task", name: "New task", start: t, end: addDays(t, 4), progress: 0, subs: [], children: [] };
+    const it = { id: nextId(), type: "task", name: "New task", start: t, end: t, progress: 0, subs: [], children: [] };
     state.items.push(it);
     render(); saveStorage(); openEditor(it.id);
   });
   document.getElementById("addGroup").addEventListener("click", () => {
     const t = todayIso();
-    const child = { id: nextId(), type: "task", name: "First child task", start: t, end: addDays(t, 1), progress: 0, subs: [], children: [] };
+    const child = { id: nextId(), type: "task", name: "First child task", start: t, end: t, progress: 0, subs: [], children: [] };
     const it = { id: nextId(), type: "task", name: "New phase", start: null, end: null, progress: 0, subs: [], children: [child] };
     state.items.push(it);
     render(); saveStorage(); openEditor(it.id);
