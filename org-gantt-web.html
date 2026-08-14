@@ -135,7 +135,15 @@
     overflow: hidden; margin-bottom: 20px;
   }
   .chart-grid { display: flex; align-items: flex-start; }
-  .label-col { flex: 0 0 auto; width: 260px; background: var(--panel); border-right: 1.5px solid var(--grid); }
+  .label-col { flex: 0 0 auto; width: 260px; background: var(--panel); }
+  .col-resizer {
+    flex: 0 0 7px; align-self: stretch; position: relative; cursor: col-resize; touch-action: none;
+  }
+  .col-resizer::before {
+    content: ""; position: absolute; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 1.5px; background: var(--grid);
+  }
+  .col-resizer:hover::before, .col-resizer.dragging::before { width: 3px; background: var(--bar); }
   .label-head { height: 52px; border-bottom: 1.5px solid var(--grid); }
   .label-cell {
     height: 44px; border-bottom: 1px solid var(--grid);
@@ -388,6 +396,7 @@
 <div class="chart-wrap">
   <div class="chart-grid">
     <div class="label-col" id="labelCol"></div>
+    <div class="col-resizer" id="colResizer" title="Drag to resize the task column" role="separator" aria-orientation="vertical"></div>
     <div class="chart-scroll">
       <div class="chart" id="chart"></div>
     </div>
@@ -1055,6 +1064,36 @@
   function zoomIn()  { setZoom(dayW * 1.3, true); }
   function zoomOut() { setZoom(dayW / 1.3, true); }
   function zoomFit() { fitMode = true; renderChart(); scroller().scrollLeft = 0; }
+  // Draggable splitter to widen/narrow the task-name column (persisted).
+  const LABEL_MIN = 120, LABEL_MAX = 640;
+  function initColResizer() {
+    const resizer = document.getElementById("colResizer");
+    try {
+      const w = parseInt(localStorage.getItem("org-gantt-labelw"), 10);
+      if (w) labelCol.style.width = Math.max(LABEL_MIN, Math.min(LABEL_MAX, w)) + "px";
+    } catch (_) {}
+    resizer.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      resizer.classList.add("dragging");
+      document.body.style.userSelect = "none";
+      const startX = ev.clientX, startW = labelCol.getBoundingClientRect().width;
+      function onMove(e) {
+        labelCol.style.width = Math.max(LABEL_MIN, Math.min(LABEL_MAX, startW + e.clientX - startX)) + "px";
+      }
+      function onUp() {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        resizer.classList.remove("dragging");
+        document.body.style.userSelect = "";
+        try { localStorage.setItem("org-gantt-labelw", parseInt(labelCol.style.width, 10)); } catch (_) {}
+        if (fitMode) renderChart();   // fit depends on the timeline pane's width
+      }
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
+  }
+
   function scrollToToday() {
     // Deferred a frame: on boot the container hasn't been laid out yet, so
     // clientWidth reads 0 and the centering offset would be lost.
@@ -1572,6 +1611,7 @@
   document.getElementById("zoomIn").addEventListener("click", zoomIn);
   document.getElementById("zoomOut").addEventListener("click", zoomOut);
   document.getElementById("zoomFit").addEventListener("click", zoomFit);
+  initColResizer();
 
   document.getElementById("linkFile").addEventListener("click", linkFile);
   document.getElementById("syncFile").addEventListener("click", syncToFile);

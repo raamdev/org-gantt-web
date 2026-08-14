@@ -124,7 +124,8 @@ Rules:
   cells, built alongside the bars in `renderChart` and kept row-aligned — `.label-head`
   matches the 52px axis, `.label-cell` matches the 44px rows) and the scrolling
   `.chart-scroll` holding the day grid + bars. Labels are their own column, never
-  overlaying the grid.
+  overlaying the grid. A `.col-resizer` splitter between them (`initColResizer`) drags
+  the label column width (clamped 120–640px, persisted in localStorage `org-gantt-labelw`).
 - `chartRange()` spans the file's earliest task start → latest end/target, padded
   **±1 week** (`addDays`), start snapped to Monday. The `.chart-scroll` pane is wider
   than its container at normal zoom, so only the timeline scrolls/swipes horizontally
