@@ -146,7 +146,7 @@
   .col-resizer:hover::before, .col-resizer.dragging::before { width: 3px; background: var(--bar); }
   .label-head { height: 52px; border-bottom: 1.5px solid var(--grid); }
   .label-cell {
-    height: 44px; border-bottom: 1px solid var(--grid);
+    height: 22px; border-bottom: 1px solid var(--grid);
     display: flex; align-items: center; gap: 5px;
     padding: 0 12px 0 14px; font-size: 13px; font-weight: 600; color: var(--ink);
     cursor: pointer; overflow: hidden;
@@ -177,7 +177,7 @@
   .axis .daynum.wk { top: 22px; text-align: left; padding-left: 4px; }
   .axis .daynum.wk .dn { font-size: 11px; font-weight: 600; color: var(--muted); }
 
-  .row { position: relative; height: 44px; border-bottom: 1px solid var(--grid); }
+  .row { position: relative; height: 22px; border-bottom: 1px solid var(--grid); }
   .row:last-child { border-bottom: none; }
   .row.selected { background: #F3F7FA; }
   .row.reordering { opacity: 0.45; }
@@ -202,7 +202,7 @@
   }
 
   .bar {
-    position: absolute; top: 9px; height: 26px; border-radius: 5px;
+    position: absolute; top: 3px; height: 16px; border-radius: 4px;
     background: var(--bar); cursor: grab; touch-action: none;
     display: flex; align-items: center; overflow: hidden;
   }
@@ -218,32 +218,32 @@
     position: absolute; right: 0; top: 0; bottom: 0; width: 10px; cursor: ew-resize; z-index: 3;
   }
   .bar .handle::after {
-    content: ""; position: absolute; right: 3px; top: 7px; bottom: 7px; width: 2px;
+    content: ""; position: absolute; right: 3px; top: 4px; bottom: 4px; width: 2px;
     background: rgba(255,255,255,0.55); border-radius: 1px;
   }
 
   /* summary bar for parent groups: thin dark span with end caps */
   .groupbar {
-    position: absolute; top: 14px; height: 9px; border-radius: 2px;
+    position: absolute; top: 7px; height: 6px; border-radius: 2px;
     background: var(--group); cursor: grab; touch-action: none;
   }
   .groupbar:active { cursor: grabbing; }
   .groupbar::before, .groupbar::after {
-    content: ""; position: absolute; top: 9px; border-left: 5px solid transparent;
-    border-right: 5px solid transparent; border-top: 6px solid var(--group);
+    content: ""; position: absolute; top: 6px; border-left: 5px solid transparent;
+    border-right: 5px solid transparent; border-top: 5px solid var(--group);
   }
   .groupbar::before { left: 0; }
   .groupbar::after { right: 0; }
   .groupbar .gfill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--done); border-radius: 2px 0 0 2px; }
   .groupbar .gtag {
-    position: absolute; left: calc(100% + 10px); top: -4px;
+    position: absolute; left: calc(100% + 10px); top: -3px;
     font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap;
   }
   .groupbar.done100 { background: var(--done); }
   .groupbar.done100::before, .groupbar.done100::after { border-top-color: var(--done); }
 
   .milestone {
-    position: absolute; top: 12px; width: 20px; height: 20px; cursor: grab; touch-action: none; z-index: 4;
+    position: absolute; top: 3px; width: 16px; height: 16px; cursor: grab; touch-action: none; z-index: 4;
   }
   .milestone svg { display: block; }
   .milestone.done polygon { fill: var(--done); }
@@ -1142,7 +1142,7 @@
     }
 
     const AXIS_H = 52;
-    const totalH = AXIS_H + rows.length * 44;
+    const totalH = AXIS_H + rows.length * 22;
 
     // left column header cell, aligned with the axis height
     const lhead = document.createElement("div");
@@ -1248,14 +1248,14 @@
         attachDrag(bar, it);
         row.appendChild(bar);
       } else {
-        const x = diffDays(lo, it.start) * dayW + dayW / 2 - 10;
+        const x = diffDays(lo, it.start) * dayW + dayW / 2 - 8;
         const msEl = document.createElement("div");
         msEl.className = "milestone" + (effProgress(it) >= 100 ? " done" : "");
         msEl.style.left = x + "px";
         msEl.setAttribute("role", "button");
         msEl.setAttribute("tabindex", "0");
         msEl.setAttribute("aria-label", "Milestone: " + it.name + ", " + fmtShort(it.start));
-        msEl.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20"><polygon points="10,1 19,10 10,19 1,10" fill="#E5731F"/></svg>';
+        msEl.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 15,8 8,15 1,8" fill="#E5731F"/></svg>';
         attachDrag(msEl, it);
         row.appendChild(msEl);
       }
