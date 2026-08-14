@@ -116,15 +116,20 @@ Rules:
   toolbar call `zoomOut`/`zoomFit`/`zoomIn`; `setZoom` keeps the centered day fixed.
   `fitMode` (set by Fit) recomputes `dayW` each render to fit the whole span. Rows
   flattened via `visibleRows()` honoring the in-memory `collapsed` set. One `.daycol`
-  per day (alternating `.odd` stripe, `.weekend` shaded); zoomed out (`dayW < 12`) the
+  per day (two alternating shades via `.odd`; weekends are NOT distinguished); zoomed out (`dayW < 12`) the
   grid goes `.dense` (per-day borders off, Monday `.wkline`s on). The axis prints every
   day's number + weekday initial when `dayW >= 18`, else Mondays only (`.daynum.wk`).
   Today line (solid orange), target line (dashed orange).
+- Layout is two panes in a flex `.chart-grid`: a fixed-width `.label-col` (task-name
+  cells, built alongside the bars in `renderChart` and kept row-aligned — `.label-head`
+  matches the 52px axis, `.label-cell` matches the 44px rows) and the scrolling
+  `.chart-scroll` holding the day grid + bars. Labels are their own column, never
+  overlaying the grid.
 - `chartRange()` spans the file's earliest task start → latest end/target, padded
-  **±1 calendar month** (`addMonths`), start snapped to Monday. The chart is wider than
-  its `.chart-scroll` container at normal zoom, so it scrolls/swipes horizontally with
-  the row labels pinned (`position: sticky`); `scrollToToday()` (rAF-deferred for
-  layout) sets the initial scroll so today sits ~30% from the left.
+  **±1 week** (`addDays`), start snapped to Monday. The `.chart-scroll` pane is wider
+  than its container at normal zoom, so only the timeline scrolls/swipes horizontally
+  while the label column stays put; `scrollToToday()` (rAF-deferred for layout) sets the
+  initial scroll so today sits ~30% from the left.
 - Drag (`attachDrag`, one handler, **axis-locked**): a drag on the bar commits to one
   axis from the first ~4px of movement. Horizontal → reschedule (day-quantized; a
   phase's summary bar shifts all children by the same delta; the right-edge `.handle`

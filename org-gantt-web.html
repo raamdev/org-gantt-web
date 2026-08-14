@@ -25,7 +25,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: var(--paper); color: var(--ink); font-family: var(--sans); }
-  body { padding: 20px 24px 48px; max-width: 1200px; margin: 0 auto; }
+  body { padding: 20px 24px 48px; }
 
   /* ---------- header ---------- */
   header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px 28px; margin-bottom: 6px; }
@@ -134,7 +134,22 @@
     background: var(--panel); border: 1.5px solid var(--grid); border-radius: 10px;
     overflow: hidden; margin-bottom: 20px;
   }
-  .chart-scroll { overflow-x: auto; }
+  .chart-grid { display: flex; align-items: flex-start; }
+  .label-col { flex: 0 0 auto; width: 260px; background: var(--panel); border-right: 1.5px solid var(--grid); }
+  .label-head { height: 52px; border-bottom: 1.5px solid var(--grid); }
+  .label-cell {
+    height: 44px; border-bottom: 1px solid var(--grid);
+    display: flex; align-items: center; gap: 5px;
+    padding: 0 12px 0 14px; font-size: 13px; font-weight: 600; color: var(--ink);
+    cursor: pointer; overflow: hidden;
+  }
+  .label-cell:last-child { border-bottom: none; }
+  .label-cell .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .label-cell.child { padding-left: 38px; font-weight: 500; font-size: 12.5px; color: #3B434B; }
+  .label-cell.group { font-weight: 700; }
+  .label-cell.selected { background: #F3F7FA; }
+  .label-cell:hover { background: var(--weekend); }
+  .chart-scroll { overflow-x: auto; flex: 1 1 auto; min-width: 0; }
   .chart { position: relative; min-width: 100%; }
 
   .axis { position: relative; height: 52px; border-bottom: 1.5px solid var(--grid); }
@@ -151,22 +166,11 @@
     display: block; font-family: var(--mono); font-size: 12.5px; font-weight: 700;
     line-height: 1.15; color: var(--ink);
   }
-  .axis .daynum.weekend .dn { color: var(--muted); }
   .axis .daynum.wk { top: 22px; text-align: left; padding-left: 4px; }
   .axis .daynum.wk .dn { font-size: 11px; font-weight: 600; color: var(--muted); }
 
   .row { position: relative; height: 44px; border-bottom: 1px solid var(--grid); }
   .row:last-child { border-bottom: none; }
-  .row .rowlabel {
-    position: sticky; left: 0; z-index: 5;
-    display: inline-flex; align-items: center; gap: 5px; height: 100%;
-    padding: 0 10px 0 14px; font-size: 13px; font-weight: 600;
-    background: linear-gradient(to right, var(--panel) 82%, transparent);
-    max-width: 240px; pointer-events: none; white-space: nowrap; overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .row.child .rowlabel { padding-left: 38px; font-weight: 500; font-size: 12.5px; color: #3B434B; }
-  .row.grouprow .rowlabel { font-weight: 700; }
   .row.selected { background: #F3F7FA; }
   .row.reordering { opacity: 0.45; }
   .toggle {
@@ -178,7 +182,6 @@
   .gridlayer { position: absolute; inset: 0; pointer-events: none; }
   .daycol { position: absolute; top: 0; bottom: 0; border-right: 1px solid var(--grid); }
   .daycol.odd { background: var(--day-stripe); }
-  .daycol.weekend { background: var(--weekend); }
   .gridlayer.dense .daycol { border-right: none; }
   .wkline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--grid); }
   .dropline {
@@ -321,8 +324,9 @@
   }
   @media (max-width: 700px) {
     body { padding: 12px 10px 40px; }
-    .row .rowlabel { max-width: 140px; font-size: 12px; }
-    .row.child .rowlabel { padding-left: 28px; }
+    .label-col { width: 150px; }
+    .label-cell { font-size: 12px; }
+    .label-cell.child { padding-left: 28px; }
   }
 </style>
 </head>
@@ -382,8 +386,11 @@
 </div>
 
 <div class="chart-wrap">
-  <div class="chart-scroll">
-    <div class="chart" id="chart"></div>
+  <div class="chart-grid">
+    <div class="label-col" id="labelCol"></div>
+    <div class="chart-scroll">
+      <div class="chart" id="chart"></div>
+    </div>
   </div>
 </div>
 
@@ -453,7 +460,6 @@
   function d(iso) { return new Date(iso + "T12:00:00Z"); }
   function iso(date) { return date.toISOString().slice(0, 10); }
   function addDays(isoStr, n) { return iso(new Date(d(isoStr).getTime() + n * DAY)); }
-  function addMonths(isoStr, n) { const dt = d(isoStr); dt.setUTCMonth(dt.getUTCMonth() + n); return iso(dt); }
   function diffDays(a, b) { return Math.round((d(b) - d(a)) / DAY); }
   function todayIso() { return iso(new Date(Date.now() - new Date().getTimezoneOffset() * 60000)); }
   function orgStamp(isoStr) { const dt = d(isoStr); return "<" + isoStr + " " + DOW[dt.getUTCDay()] + ">"; }
@@ -994,8 +1000,8 @@
   // ---------- range ----------
   function chartRange() {
     const t = todayIso();
-    // Span = earliest → latest date in the file, then padded 1 month on each side so
-    // there's always runway to scroll into. Based on the file's own dates (+ target).
+    // Span = earliest → latest date in the file, padded 1 week on each side so there's
+    // a little runway to scroll into. Based on the file's own dates (+ target).
     let lo = null, hi = null;
     for (const it of leaves()) {
       if (!lo || d(it.start) < d(lo)) lo = it.start;
@@ -1004,8 +1010,8 @@
     if (state.targetDate && (!hi || d(state.targetDate) > d(hi))) hi = state.targetDate;
     if (!lo) lo = t;
     if (!hi) hi = t;
-    lo = addMonths(lo, -1);
-    hi = addMonths(hi, 1);
+    lo = addDays(lo, -7);
+    hi = addDays(hi, 7);
     const back = (d(lo).getUTCDay() + 6) % 7;   // snap start to Monday
     lo = addDays(lo, -back);
     return { lo, hi, days: diffDays(lo, hi) + 1 };
@@ -1013,9 +1019,10 @@
 
   // ---------- rendering ----------
   const chartEl = document.getElementById("chart");
-  let dayW = 26;              // px per day (the zoom level)
-  let fitMode = false;        // true → recompute dayW each render to fit the whole span
+  const labelCol = document.getElementById("labelCol");
   const ZOOM_MIN = 6, ZOOM_MAX = 64;
+  let dayW = ZOOM_MAX;        // px per day (the zoom level); default is fully zoomed in
+  let fitMode = false;        // true → recompute dayW each render to fit the whole span
 
   function visibleRows() {
     const rows = [];
@@ -1050,12 +1057,12 @@
   function zoomFit() { fitMode = true; renderChart(); scroller().scrollLeft = 0; }
   function scrollToToday() {
     // Deferred a frame: on boot the container hasn't been laid out yet, so
-    // clientWidth reads 0 and the "keep some past in view" offset would be lost.
+    // clientWidth reads 0 and the centering offset would be lost.
     requestAnimationFrame(() => {
       const box = scroller();
       const { lo } = chartRange();
-      const x = diffDays(lo, todayIso()) * dayW;
-      box.scrollLeft = Math.max(0, x - box.clientWidth * 0.3);
+      const todayCenter = diffDays(lo, todayIso()) * dayW + dayW / 2;
+      box.scrollLeft = Math.max(0, todayCenter - box.clientWidth / 2);   // center today
     });
   }
 
@@ -1088,6 +1095,7 @@
 
     chartEl.style.width = width + "px";
     chartEl.innerHTML = "";
+    labelCol.innerHTML = "";
 
     if (!rows.length) {
       chartEl.innerHTML = '<div class="empty-hint">No tasks yet — add one above, or paste an org file into the buffer below.</div>';
@@ -1097,6 +1105,11 @@
     const AXIS_H = 52;
     const totalH = AXIS_H + rows.length * 44;
 
+    // left column header cell, aligned with the axis height
+    const lhead = document.createElement("div");
+    lhead.className = "label-head";
+    labelCol.appendChild(lhead);
+
     // per-day columns: one shaded column per day (alternating stripes; weekends darker).
     // When zoomed far out ("dense"), drop per-day borders and mark weeks with Monday lines.
     const dense = dayW < 12;
@@ -1105,9 +1118,8 @@
     grid.style.height = totalH + "px";
     for (let i = 0; i < days; i++) {
       const wd = d(addDays(lo, i)).getUTCDay();
-      const weekend = wd === 0 || wd === 6;
       const col = document.createElement("div");
-      col.className = "daycol" + (weekend ? " weekend" : (i % 2 ? " odd" : ""));
+      col.className = "daycol" + (i % 2 ? " odd" : "");   // two alternating shades, weekends included
       col.style.left = (i * dayW) + "px";
       col.style.width = dayW + "px";
       grid.appendChild(col);
@@ -1136,7 +1148,7 @@
       }
       if (!perDay && wd !== 1) continue;          // zoomed out: label Mondays only
       const dc = document.createElement("div");
-      dc.className = "daynum" + (perDay ? "" : " wk") + (wd === 0 || wd === 6 ? " weekend" : "");
+      dc.className = "daynum" + (perDay ? "" : " wk");
       dc.style.left = (i * dayW) + "px";
       if (perDay) dc.style.width = dayW + "px";
       dc.innerHTML = perDay
@@ -1209,8 +1221,17 @@
         row.appendChild(msEl);
       }
 
-      const label = document.createElement("span");
-      label.className = "rowlabel";
+      row.addEventListener("click", () => {
+        if (dragMoved) return;
+        openEditor(it.id);
+      });
+      chartEl.appendChild(row);
+
+      // matching task-name cell in the fixed left column
+      const cell = document.createElement("div");
+      cell.className = "label-cell" + (depth ? " child" : "") + (group ? " group" : "") +
+        (it.id === selectedId ? " selected" : "");
+      cell.dataset.id = it.id;
       if (group) {
         const tog = document.createElement("button");
         tog.className = "toggle";
@@ -1222,16 +1243,14 @@
           if (collapsed.has(it.id)) collapsed.delete(it.id); else collapsed.add(it.id);
           renderChart();
         });
-        label.appendChild(tog);
+        cell.appendChild(tog);
       }
-      label.appendChild(document.createTextNode(it.name));
-      row.appendChild(label);
-
-      row.addEventListener("click", () => {
-        if (dragMoved) return;
-        openEditor(it.id);
-      });
-      chartEl.appendChild(row);
+      const nameEl = document.createElement("span");
+      nameEl.className = "name";
+      nameEl.textContent = it.name;
+      cell.appendChild(nameEl);
+      cell.addEventListener("click", () => openEditor(it.id));
+      labelCol.appendChild(cell);
     });
 
     addMarker(lo, todayIso(), "today", "today", totalH);
