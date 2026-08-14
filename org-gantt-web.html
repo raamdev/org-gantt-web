@@ -156,7 +156,6 @@
   .label-cell.child { padding-left: 38px; font-weight: 500; font-size: 12.5px; color: #3B434B; }
   .label-cell.group { font-weight: 700; }
   .label-cell.selected { background: #F3F7FA; }
-  .label-cell:hover { background: var(--weekend); }
   .chart-scroll { overflow-x: auto; flex: 1 1 auto; min-width: 0; }
   .chart { position: relative; min-width: 100%; }
 
@@ -181,6 +180,7 @@
   .row:last-child { border-bottom: none; }
   .row.selected { background: #F3F7FA; }
   .row.reordering { opacity: 0.45; }
+  .row.hover, .label-cell.hover { background: var(--weekend); }   /* whole-row hover, both panes */
   .toggle {
     pointer-events: auto; cursor: pointer; border: none; background: none;
     font-size: 11px; color: var(--muted); padding: 4px; line-height: 1;
@@ -1029,6 +1029,7 @@
   // ---------- rendering ----------
   const chartEl = document.getElementById("chart");
   const labelCol = document.getElementById("labelCol");
+  let hoveredId = null;      // row currently under the mouse (highlighted in both panes)
   const ZOOM_MIN = 6, ZOOM_MAX = 64;
   let dayW = ZOOM_MAX;        // px per day (the zoom level); default is fully zoomed in
   let fitMode = false;        // true → recompute dayW each render to fit the whole span
@@ -1049,6 +1050,18 @@
     renderHeader();
     renderChart();
     renderBuffer();
+  }
+
+  // Highlight the row under the mouse in BOTH panes (label cell + bar row).
+  function applyHover(id) {
+    if (hoveredId === id) return;
+    hoveredId = id;
+    document.querySelectorAll(".row.hover, .label-cell.hover").forEach((e) => e.classList.remove("hover"));
+    if (!id) return;
+    const row = chartEl.querySelector('.row[data-id="' + id + '"]');
+    const cell = labelCol.querySelector('.label-cell[data-id="' + id + '"]');
+    if (row) row.classList.add("hover");
+    if (cell) cell.classList.add("hover");
   }
 
   // ---------- zoom & scroll ----------
@@ -1294,6 +1307,14 @@
 
     addMarker(lo, todayIso(), "today", "today", totalH);
     if (state.targetDate) addMarker(lo, state.targetDate, "target", "target " + fmtShort(state.targetDate), totalH);
+
+    // rows were rebuilt — re-apply the current hover so it survives re-renders
+    if (hoveredId) {
+      const r = chartEl.querySelector('.row[data-id="' + hoveredId + '"]');
+      const c = labelCol.querySelector('.label-cell[data-id="' + hoveredId + '"]');
+      if (r) r.classList.add("hover");
+      if (c) c.classList.add("hover");
+    }
   }
 
   function addMarker(lo, dateIso, cls, text, totalH) {
@@ -1612,6 +1633,14 @@
   document.getElementById("zoomOut").addEventListener("click", zoomOut);
   document.getElementById("zoomFit").addEventListener("click", zoomFit);
   initColResizer();
+
+  // Whole-row hover: one delegated listener over both panes.
+  const chartGrid = document.querySelector(".chart-grid");
+  chartGrid.addEventListener("mouseover", (e) => {
+    const el = e.target.closest("[data-id]");
+    applyHover(el ? el.dataset.id : null);
+  });
+  chartGrid.addEventListener("mouseleave", () => applyHover(null));
 
   document.getElementById("linkFile").addEventListener("click", linkFile);
   document.getElementById("syncFile").addEventListener("click", syncToFile);
