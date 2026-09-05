@@ -54,6 +54,8 @@ demo → nothing. `MODE`, `currentProjectId`, and `projects` hold the mode state
   `SAFE_ID` + a root-containment check block path traversal (matters once hosted).
 
 Run it: `python3 server.py --dir ~/Dropbox/gantt` (defaults to `./projects`, port 8730).
+Mutating requests log a timestamped line to stdout (`created`/`updated`/`deleted <id>`,
+with byte count on updates); reads are silent, and `--demo` logs nothing (`log()` helper).
 
 ## Org format contract (do not break)
 

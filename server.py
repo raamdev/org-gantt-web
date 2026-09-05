@@ -17,7 +17,7 @@ import json
 import os
 import re
 import threading
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, unquote
 
@@ -30,6 +30,11 @@ STATE_NAME = ".org-gantt-state.json"          # per-dir "recently opened" tracki
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]*\.org$")
 TITLE_RE = re.compile(r"^#\+TITLE:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def log(msg):
+    """Timestamped line to stdout (flushed so it shows up live under the server)."""
+    print("[%s] %s" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), msg), flush=True)
 
 
 def org_stamp(d):
@@ -457,7 +462,10 @@ class Handler(BaseHTTPRequestHandler):
         if self._path() == "/api/projects":
             name = (self._body_json().get("name") or "New project").strip()
             try:
-                return self._send_json(self.store.create(name), 201)
+                result = self.store.create(name)
+                if not self.store.demo:
+                    log("created %s" % result.get("id"))
+                return self._send_json(result, 201)
             except (OSError, ValueError) as e:
                 return self._send_json({"error": str(e)}, 400)
         return self._send_json({"error": "not found"}, 404)
@@ -470,7 +478,10 @@ class Handler(BaseHTTPRequestHandler):
             if text is None:
                 return self._send_json({"error": "missing text"}, 400)
             try:
-                return self._send_json(self.store.write(pid, text))
+                result = self.store.write(pid, text)
+                if not self.store.demo:
+                    log("updated %s (%d bytes)" % (pid, len(text.encode("utf-8"))))
+                return self._send_json(result)
             except (OSError, ValueError) as e:
                 return self._send_json({"error": str(e)}, 400)
         return self._send_json({"error": "not found"}, 404)
@@ -480,7 +491,10 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             pid = unquote(m.group(1))
             try:
-                return self._send_json(self.store.delete(pid))
+                result = self.store.delete(pid)
+                if not self.store.demo:
+                    log("deleted %s" % pid)
+                return self._send_json(result)
             except (OSError, ValueError) as e:
                 return self._send_json({"error": str(e)}, 400)
         return self._send_json({"error": "not found"}, 404)
