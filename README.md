@@ -2,7 +2,7 @@
 
 > A web-based Gantt chart whose database is a plain [org-mode](https://orgmode.org/) file.
 
-![org-gantt-web showing a product-launch plan with phases, milestones, and progress](docs/screenshot.png)
+![org-gantt-web: a Kanban board of projects above a product-launch gantt chart with phases, milestones, and progress, over its plain org-mode source](docs/screenshot.png)
 
 A single-file Gantt chart web app whose **native storage format is org-mode plain text**.
 Built for solo project scheduling with one hard requirement: **data sovereignty**. The
