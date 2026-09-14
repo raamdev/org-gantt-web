@@ -38,6 +38,8 @@ org-mode, so you can drag bars around in the browser and edit the same file in E
   scrolls/swipes horizontally with task names pinned.
 - **Editable org buffer** — the plain-text source sits under the chart; edit either
   one and they stay in sync.
+- **Light & dark theme** — follows your OS by default; a toggle in the upper right
+  switches and remembers your choice.
 - **Multiple projects** with a most-recent-first switcher (server mode).
 - **Autosave to disk** (server mode), atomic writes, so Emacs never sees a half-written
   file.

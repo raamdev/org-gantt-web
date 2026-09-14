@@ -168,6 +168,19 @@ Rules:
   top-level) are not supported yet.
 - The faux Emacs modeline under the buffer shows `**` when dirty. Keep it — it's the
   app's personality.
+- **Theming** (`initTheme`, `#themeToggle` in the top `.appbar` — a full-width bar at the
+  very top of the page, above the board, sized to the toggle's height with an empty
+  `.appname` slot on the left reserved for a future app name; present in every mode).
+  Light is the default `:root` palette; a dark palette redefines the same tokens
+  under both `:root[data-theme="dark"]` and `@media (prefers-color-scheme: dark)
+  :root:not([data-theme="light"])`, so with no explicit choice the OS wins and an explicit
+  choice overrides. Every rule is written against the CSS variables (a handful of
+  formerly-hardcoded colors became tokens: `--sel`, `--ink-soft`, `--accent-bg`,
+  `--accent-border`; `color-scheme` is set per theme so native date pickers/scrollbars
+  follow). The toggle stores `light`/`dark` in `localStorage["org-gantt-theme"]` (absent =
+  follow OS) and swaps only the tokens — no re-render needed. The milestone diamond gets
+  its color from `.milestone polygon { fill: var(--accent) }`, overriding the inline SVG
+  fallback fill so it re-themes too.
 - **Kanban board** (`#kanban` at the top of the page, server/demo only — standalone has
   one linked file and no board). Each card is a project; the board is built in
   `renderBoard()` from `board.columns` (loaded via `loadBoard()`) + the enriched

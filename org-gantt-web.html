@@ -20,8 +20,65 @@
     --done: #5E8C6A;
     --buffer-bg: #FDFDFB;
     --modeline: #3A4450;
+    --sel: var(--sel);              /* row / card selection tint */
+    --ink-soft: #3B434B;         /* secondary text (child labels) */
+    --accent-bg: #FFF6EE;        /* soft accent surface (demo flag, apply bar) */
+    --accent-border: #F3D9C4;
+    --shadow: rgba(0,0,0,0.12);
     --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+
+  /* ---------- dark theme ----------
+     Three states: no data-theme ⇒ follow the OS (media query); data-theme="dark"
+     forces dark; data-theme="light" forces light. Only the tokens change — every
+     rule below is already written against these variables. */
+  :root[data-theme="dark"] {
+    --paper: #14181C;
+    --panel: #1E242B;
+    --ink: #E6E9EC;
+    --muted: #8A929B;
+    --grid: #333B44;
+    --weekend: #2A323B;
+    --day-stripe: #191E24;
+    --bar: #4785AC;
+    --bar-fill: #2F5F7E;
+    --group: #AEB7C1;
+    --accent: #F0842E;
+    --done: #6FA47C;
+    --buffer-bg: #171C21;
+    --modeline: #0E1216;
+    --sel: #26333C;
+    --ink-soft: #C2CAD2;
+    --accent-bg: #33251A;
+    --accent-border: #5A3F27;
+    --shadow: rgba(0,0,0,0.55);
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #14181C;
+      --panel: #1E242B;
+      --ink: #E6E9EC;
+      --muted: #8A929B;
+      --grid: #333B44;
+      --weekend: #2A323B;
+      --day-stripe: #191E24;
+      --bar: #4785AC;
+      --bar-fill: #2F5F7E;
+      --group: #AEB7C1;
+      --accent: #F0842E;
+      --done: #6FA47C;
+      --buffer-bg: #171C21;
+      --modeline: #0E1216;
+      --sel: #26333C;
+      --ink-soft: #C2CAD2;
+      --accent-bg: #33251A;
+      --accent-border: #5A3F27;
+      --shadow: rgba(0,0,0,0.55);
+      color-scheme: dark;
+    }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { background: var(--paper); color: var(--ink); font-family: var(--sans); }
@@ -45,6 +102,23 @@
   }
   .hstat input[type="date"]:hover, .hstat input[type="date"]:focus { border-bottom-color: var(--grid); outline: none; }
   .countdown.late { color: var(--accent); }
+
+  /* ---------- top app bar (holds the theme toggle; room for an app name later) ---------- */
+  .appbar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 38px; margin-bottom: 16px;         /* height == the toggle button */
+  }
+  .appbar .appname {
+    font-weight: 700; font-size: 15px; letter-spacing: -0.01em; color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .theme-toggle {
+    align-self: center; flex: none; width: 38px; height: 38px; padding: 0;
+    border: 1.5px solid var(--grid); border-radius: 8px; background: var(--panel);
+    color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .theme-toggle:hover { background: var(--weekend); color: var(--ink); border-color: var(--ink); }
+  .theme-toggle svg { width: 18px; height: 18px; display: block; }
 
   .subhead { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
   .subhead code { font-family: var(--mono); background: var(--weekend); padding: 1px 5px; border-radius: 3px; }
@@ -102,7 +176,7 @@
   .projlist { max-height: 320px; overflow-y: auto; }
   .projrow { display: flex; align-items: stretch; gap: 2px; border-radius: 6px; }
   .projrow:hover { background: var(--weekend); }
-  .projrow.current { background: #F3F7FA; }
+  .projrow.current { background: var(--sel); }
   .projpick {
     flex: 1; display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
     border: none; background: none; text-align: left; padding: 8px 10px; cursor: pointer;
@@ -126,7 +200,7 @@
   .savestatus.error { color: var(--accent); font-weight: 700; }
   .demoflag {
     font-family: var(--mono); font-size: 12px; color: var(--accent);
-    background: #FFF6EE; border: 1px solid #F3D9C4; padding: 3px 8px; border-radius: 6px;
+    background: var(--accent-bg); border: 1px solid var(--accent-border); padding: 3px 8px; border-radius: 6px;
   }
 
   /* ---------- kanban board ---------- */
@@ -172,7 +246,7 @@
     flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px;
     min-height: 40px;
   }
-  .kcol-list.dragover { background: #F3F7FA; }
+  .kcol-list.dragover { background: var(--sel); }
   .kcard {
     background: var(--panel); border: 1.5px solid var(--grid); border-radius: 8px;
     padding: 9px 10px; cursor: grab; position: relative;
@@ -248,9 +322,9 @@
   }
   .label-cell:last-child { border-bottom: none; }
   .label-cell .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .label-cell.child { padding-left: 38px; font-weight: 500; font-size: 12.5px; color: #3B434B; }
+  .label-cell.child { padding-left: 38px; font-weight: 500; font-size: 12.5px; color: var(--ink-soft); }
   .label-cell.group { font-weight: 700; }
-  .label-cell.selected { background: #F3F7FA; }
+  .label-cell.selected { background: var(--sel); }
   .chart-scroll { overflow-x: auto; flex: 1 1 auto; min-width: 0; }
   .chart { position: relative; min-width: 100%; }
 
@@ -273,7 +347,7 @@
 
   .row { position: relative; height: 22px; border-bottom: 1px solid var(--grid); }
   .row:last-child { border-bottom: none; }
-  .row.selected { background: #F3F7FA; }
+  .row.selected { background: var(--sel); }
   .row.reordering { opacity: 0.45; }
   .row.hover, .label-cell.hover { background: var(--weekend); }   /* whole-row hover, both panes */
   .toggle {
@@ -341,6 +415,7 @@
     position: absolute; top: 3px; width: 16px; height: 16px; cursor: grab; touch-action: none; z-index: 4;
   }
   .milestone svg { display: block; }
+  .milestone polygon { fill: var(--accent); }        /* themable; overrides the inline fallback fill */
   .milestone.done polygon { fill: var(--done); }
 
   .marker { position: absolute; top: 0; bottom: 0; width: 0; z-index: 3; pointer-events: none; }
@@ -408,13 +483,13 @@
     border: none; background: transparent; padding: 14px 16px;
     font-family: var(--mono); font-size: 12.5px; line-height: 1.55; color: var(--ink);
   }
-  #orgText:focus { outline: none; background: #FFFFFF; }
+  #orgText:focus { outline: none; background: var(--panel); }
   .buffer .modeline {
     font-family: var(--mono); font-size: 11.5px; color: #DDE3EA;
     background: var(--modeline); padding: 4px 12px; display: flex; justify-content: space-between; gap: 12px;
   }
   .buffer .modeline .dirty { color: var(--accent); font-weight: 700; }
-  .applybar { display: none; gap: 8px; padding: 8px 10px; background: #FFF6EE; border-top: 1.5px solid var(--grid); align-items: center; }
+  .applybar { display: none; gap: 8px; padding: 8px 10px; background: var(--accent-bg); border-top: 1.5px solid var(--grid); align-items: center; }
   .applybar.show { display: flex; }
   .applybar .msg { font-size: 12px; color: var(--muted); flex: 1; font-family: var(--mono); }
   .applybar .msg.err { color: var(--accent); }
@@ -434,6 +509,11 @@
 </style>
 </head>
 <body>
+
+<div class="appbar">
+  <span class="appname" id="appName"></span>
+  <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle light or dark theme"></button>
+</div>
 
 <section class="kanban" id="kanban" style="display:none">
   <div class="kanban-head">
@@ -2147,8 +2227,41 @@
 
   window.addEventListener("resize", () => renderChart());
 
+  // ---------- theme (light / dark; auto-detects the OS, remembers an explicit pick) ----------
+  const THEME_KEY = "org-gantt-theme";
+  const darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
+  const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const ICON_MOON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  function storedTheme() { try { return localStorage.getItem(THEME_KEY); } catch (_) { return null; } }
+  function effectiveTheme() {
+    return document.documentElement.getAttribute("data-theme") || (darkMQ.matches ? "dark" : "light");
+  }
+  function updateThemeButton() {
+    const btn = document.getElementById("themeToggle");
+    if (!btn) return;
+    const dark = effectiveTheme() === "dark";
+    btn.innerHTML = dark ? ICON_SUN : ICON_MOON;       // shows the theme you'd switch TO
+    btn.title = dark ? "Switch to light theme" : "Switch to dark theme";
+  }
+  function initTheme() {
+    const s = storedTheme();
+    if (s === "dark" || s === "light") document.documentElement.setAttribute("data-theme", s);
+    updateThemeButton();
+    const btn = document.getElementById("themeToggle");
+    if (btn) btn.addEventListener("click", () => {
+      const next = effectiveTheme() === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      try { localStorage.setItem(THEME_KEY, next); } catch (_) {}
+      updateThemeButton();
+    });
+    // Track the OS while the user hasn't made an explicit choice (CSS handles the
+    // repaint via the media query; we just keep the button icon in sync).
+    darkMQ.addEventListener("change", () => { if (!storedTheme()) updateThemeButton(); });
+  }
+
   // ---------- boot ----------
   (async function boot() {
+    initTheme();
     let cfg = null;
     try { cfg = await api.config(); } catch (_) { cfg = null; }
 
