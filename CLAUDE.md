@@ -167,7 +167,9 @@ Rules:
   listeners would sever the drag after the first pixel. Cross-level moves (child ↔
   top-level) are not supported yet.
 - The faux Emacs modeline under the buffer shows `**` when dirty. Keep it — it's the
-  app's personality.
+  app's personality. The buffer is **collapsed by default** (`.buffer.collapsed` hides the
+  textarea/applybar/modeline/Revert; the `#bufBar` tabbar toggles it, caret rotates,
+  state in `localStorage["org-gantt-buffer-collapsed"]`, absent ⇒ collapsed).
 - **Theming** (`initTheme`, `#themeToggle` in the top `.appbar` — a full-width bar at the
   very top of the page, above the board, sized to the toggle's height with an empty
   `.appname` slot on the left reserved for a future app name; present in every mode).

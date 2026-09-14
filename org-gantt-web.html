@@ -474,8 +474,16 @@
   .buffer .tabbar {
     display: flex; align-items: center; justify-content: space-between;
     background: var(--weekend); border-bottom: 1.5px solid var(--grid); padding: 6px 10px;
+    cursor: pointer; user-select: none;
   }
-  .buffer .filename { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+  .buffer.collapsed .tabbar { border-bottom: none; }
+  .buffer .filename { font-family: var(--mono); font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .buffer .bufcaret { display: inline-block; color: var(--muted); font-size: 10px; transition: transform 0.12s; }
+  .buffer.collapsed .bufcaret { transform: rotate(-90deg); }
+  .buffer.collapsed #orgText,
+  .buffer.collapsed .applybar,
+  .buffer.collapsed .modeline,
+  .buffer.collapsed #revertBuf { display: none; }
   .buffer .tab-actions { display: flex; gap: 6px; }
   .buffer .tab-actions button { padding: 3px 10px; font-size: 12px; }
   #orgText {
@@ -619,8 +627,8 @@
 </div>
 
 <div class="buffer">
-  <div class="tabbar">
-    <span class="filename" id="bufName">bathroom-renovation.org</span>
+  <div class="tabbar" id="bufBar" title="Show / hide the .org source" role="button" tabindex="0" aria-expanded="false">
+    <span class="filename"><span class="bufcaret" id="bufCaret" aria-hidden="true">▾</span><span id="bufName">bathroom-renovation.org</span></span>
     <div class="tab-actions">
       <button class="quiet" id="revertBuf" title="Discard text edits and re-render from chart">Revert</button>
     </div>
@@ -2145,10 +2153,35 @@
       msg.classList.add("err");
     }
   });
-  document.getElementById("revertBuf").addEventListener("click", () => {
+  document.getElementById("revertBuf").addEventListener("click", (e) => {
+    e.stopPropagation();          // don't also toggle the collapsed buffer
     bufferDirty = false;
     renderBuffer();
   });
+
+  // Collapse the .org buffer by default; the tabbar header toggles it (persisted).
+  (function initBufferCollapse() {
+    const buffer = document.querySelector(".buffer");
+    const bar = document.getElementById("bufBar");
+    let collapsed;
+    try { const s = localStorage.getItem("org-gantt-buffer-collapsed"); collapsed = s === null ? true : s === "1"; }
+    catch (_) { collapsed = true; }
+    function apply() {
+      buffer.classList.toggle("collapsed", collapsed);
+      bar.setAttribute("aria-expanded", String(!collapsed));
+      if (!collapsed) autosize();
+    }
+    function toggle() {
+      collapsed = !collapsed;
+      try { localStorage.setItem("org-gantt-buffer-collapsed", collapsed ? "1" : "0"); } catch (_) {}
+      apply();
+    }
+    apply();
+    bar.addEventListener("click", toggle);
+    bar.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
+  })();
 
   // ---------- toolbar ----------
   document.getElementById("addTask").addEventListener("click", () => {
