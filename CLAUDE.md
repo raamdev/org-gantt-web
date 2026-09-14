@@ -24,7 +24,9 @@ Emacs org-mode.
   `--dir` folder (point it at Dropbox). Frontend lists them, opens/creates/deletes
   them, and **autosaves** every edit back to the file (debounced ~500ms PUT, atomic
   write server-side). Works in every browser incl. Brave/Safari — no browser file
-  API needed. This replaced the aborted Flask idea; still zero-dependency.
+  API needed. This replaced the aborted Flask idea; still zero-dependency. Also serves
+  the **kanban board** of all projects (columns persisted in a `kanban.org` file in the
+  same folder; per-card column/order/note in each project's own file).
 - **demo** — `server.py --demo`. In-memory sample projects, all writes are no-ops;
   the frontend keeps edits in localStorage only. Public-safe (no host disk access,
   no cross-visitor state), intended for `gantt.orgtxt.com` as a preview-before-download.
@@ -45,17 +47,28 @@ demo → nothing. `MODE`, `currentProjectId`, and `projects` hold the mode state
 ### Backend API (`server.py`)
 
 - `GET /api/config` → `{demo, dir, version}` (frontend uses this to pick its mode).
-- `GET /api/projects` → `[{id, name, mtime, recent, size}]`, sorted most-recent-first
-  (`recent` = max(mtime, last-opened); last-opened tracked in `<dir>/.org-gantt-state.json`).
+- `GET /api/projects` → `[{id, name, mtime, recent, size, column, order, note}]`, sorted
+  most-recent-first (`recent` = max(mtime, last-opened); last-opened tracked in
+  `<dir>/.org-gantt-state.json`). `column`/`order`/`note` are the project's kanban card
+  fields, parsed from its `#+KANBAN_*` header keywords. `kanban.org` is excluded (it's
+  the board, not a project).
 - `GET /api/projects/{id}` → `{id, name, text, mtime}` (also bumps last-opened).
 - `POST /api/projects {name}` → creates `<slug>.org` from a starter template.
 - `PUT /api/projects/{id} {text}` → atomic write (`.tmp` + `os.replace`).
+- `PATCH /api/projects/{id} {title?, column?, order?, note?}` → in-place edit of just
+  those header keywords (`apply_card_patch` / `set_header_keyword`), preserving the rest
+  of the file. Used by the kanban board (move/rename/note a card). Does **not** bump
+  last-opened, so dragging a card never reshuffles the switcher's recency order.
 - `DELETE /api/projects/{id}` → removes the file. Project `id` is the `.org` basename;
   `SAFE_ID` + a root-containment check block path traversal (matters once hosted).
+- `GET /api/board` → `{columns: [...]}` — the ordered kanban columns, read from the
+  top-level headings of `kanban.org` (lazily created with `DEFAULT_COLUMNS` on first read).
+- `PUT /api/board {columns}` → rewrites `kanban.org` (one `* heading` per column).
 
 Run it: `python3 server.py --dir ~/Dropbox/gantt` (defaults to `./projects`, port 8730).
-Mutating requests log a timestamped line to stdout (`created`/`updated`/`deleted <id>`,
-with byte count on updates); reads are silent, and `--demo` logs nothing (`log()` helper).
+Mutating requests log a timestamped line to stdout (`created`/`updated`/`deleted`/`carded
+<id>`, `board columns: …`, with byte count on updates); reads are silent, and `--demo`
+logs nothing (`log()` helper). `--demo` keeps board + card edits in memory only.
 
 ## Org format contract (do not break)
 
@@ -100,6 +113,16 @@ Rules:
   levels into children of their top heading. Rationale: if a child needs dated
   sub-steps, it should probably be its own phase. (n-level nesting is a possible
   future feature, not a current one.)
+- **Kanban card fields** (file-level header keywords, all optional): `#+KANBAN_COLUMN:`
+  (which board column this project sits in — absent/unknown ⇒ the first column),
+  `#+KANBAN_ORDER:` (integer sort key within the column), `#+KANBAN_NOTE:` (a one-line
+  card note). The card's *title* is just the project's `#+TITLE`. `parseOrg`/`serialize`
+  round-trip these verbatim, so editing a project in the gantt view never drops them.
+- **The board file** `kanban.org` (a real, non-hidden `.org` in the project dir) holds
+  only the ordered column list — one top-level heading per column. It is *not* a project
+  (excluded from the listing). Column membership/order/notes live on the individual
+  projects (above); `kanban.org` is just the column skeleton, so empty columns and column
+  order survive. Reorder its headings in Emacs and the board reorders.
 
 ## Architecture notes
 
@@ -145,6 +168,20 @@ Rules:
   top-level) are not supported yet.
 - The faux Emacs modeline under the buffer shows `**` when dirty. Keep it — it's the
   app's personality.
+- **Kanban board** (`#kanban` at the top of the page, server/demo only — standalone has
+  one linked file and no board). Each card is a project; the board is built in
+  `renderBoard()` from `board.columns` (loaded via `loadBoard()`) + the enriched
+  `projects` list. `colOf(p)` resolves a card's visible column (its `column`, else the
+  first) so a card is never lost on a rename/delete. Drag-and-drop is native HTML5 DnD
+  (`draggable` + a module-level `drag = {kind:'card'|'col', …}`); cards drop into
+  `.kcol-list`, columns reorder by dragging `.kcol-head`. `moveCard` renumbers the
+  destination column (step 10) and persists only changed cards via `applyCardEdit`, which
+  routes the **open** project through `state.kanban*` + the normal full-file autosave
+  (so no PATCH races the debounced PUT) and every **other** card through
+  `PATCH /api/projects/{id}`. Column ops (`addColumn`/`renameColumn`/`deleteColumn`/
+  `reorderColumns`) mutate `board.columns` and `PUT /api/board`; rename/delete also
+  re-`applyCardEdit` the affected cards. The card editor modal edits title (`#+TITLE`) +
+  note. Collapse state is in `localStorage["org-gantt-kanban-collapsed"]`.
 
 ## Roadmap (discussed, not built)
 

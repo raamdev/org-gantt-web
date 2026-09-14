@@ -17,6 +17,11 @@ org-mode, so you can drag bars around in the browser and edit the same file in E
 
 ## Features
 
+- **Project board (Kanban)** — a board across the top organizes your projects into
+  columns (Next up, In progress, Done, or whatever you like). Add/remove/reorder columns,
+  drag cards between them, and give each card a note. Every card is one `.org` file;
+  click it to open its gantt chart below. Board state lives in plain org too (see below),
+  so it round-trips with Emacs. *(Server/demo mode.)*
 - **Drag to reschedule** — drag a bar left/right to move its dates (1-day steps); the
   change is written straight back to the `.org` file.
 - **Drag to reorder** — drag a bar up/down to change task order (rewrites the heading
@@ -104,6 +109,32 @@ Rules:
 - **Progress** — the `:PROGRESS:` property (0–100) on a leaf task. The keyword flips to
   `DONE` at 100%.
 - Nesting is two levels by design (phases → tasks).
+
+### Board metadata
+
+The Kanban board keeps its state in plain org as well. Each project file can carry three
+optional header keywords describing its card:
+
+```org
+#+KANBAN_COLUMN: In progress
+#+KANBAN_ORDER: 20
+#+KANBAN_NOTE: Waiting on the permit to clear
+```
+
+The card's title is just the project's `#+TITLE`. The ordered list of columns lives in a
+`kanban.org` file in the same folder — one heading per column — which is why empty columns
+and column order survive:
+
+```org
+#+TITLE: Project board
+
+* Next up
+* In progress
+* Done
+```
+
+`kanban.org` isn't itself a project (it never shows up as a card), and reordering its
+headings in Emacs reorders the board.
 
 `parseOrg(serialize(state))` is lossless for every supported construct. Unknown org
 content outside these constructs may be dropped on import (a documented limitation),

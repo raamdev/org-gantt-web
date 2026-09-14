@@ -129,6 +129,101 @@
     background: #FFF6EE; border: 1px solid #F3D9C4; padding: 3px 8px; border-radius: 6px;
   }
 
+  /* ---------- kanban board ---------- */
+  .kanban { margin-bottom: 22px; }
+  .kanban-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .kanban-head h2 {
+    font-size: 15px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase;
+    color: var(--ink);
+  }
+  .kanban-head .kcount { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .kanban-head .spacer { flex: 1; }
+  .kanban-head button { padding: 4px 10px; font-size: 12px; }
+  .kanban-body {
+    display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start;
+  }
+  .kanban.collapsed .kanban-body { display: none; }
+
+  .kcol {
+    flex: 0 0 244px; width: 244px; background: var(--paper);
+    border: 1.5px solid var(--grid); border-radius: 10px; display: flex; flex-direction: column;
+    max-height: 460px;
+  }
+  .kcol.dragover-col { border-color: var(--bar); }
+  .kcol.drop-before { box-shadow: -3px 0 0 var(--accent); }
+  .kcol-head {
+    display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px;
+    border-bottom: 1.5px solid var(--grid); cursor: grab; user-select: none;
+  }
+  .kcol-head:active { cursor: grabbing; }
+  .kcol-head .kcol-name {
+    font-weight: 700; font-size: 13px; color: var(--ink); flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .kcol-head .kcol-n { font-family: var(--mono); font-size: 11px; color: var(--muted); flex: none; }
+  .kcol-head .kbtn {
+    border: none; background: none; color: var(--muted); cursor: pointer;
+    padding: 2px 5px; border-radius: 5px; font-size: 12px; line-height: 1;
+  }
+  .kcol-head .kbtn:hover { background: var(--weekend); color: var(--ink); }
+  .kcol-head .kbtn.del:hover { background: var(--accent); color: #fff; }
+
+  .kcol-list {
+    flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px;
+    min-height: 40px;
+  }
+  .kcol-list.dragover { background: #F3F7FA; }
+  .kcard {
+    background: var(--panel); border: 1.5px solid var(--grid); border-radius: 8px;
+    padding: 9px 10px; cursor: grab; position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .kcard:hover { border-color: var(--bar); }
+  .kcard:active { cursor: grabbing; }
+  .kcard.dragging { opacity: 0.4; }
+  .kcard.drop-before { box-shadow: inset 0 3px 0 -1px var(--accent); }
+  .kcard .kc-title {
+    font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.3;
+    padding-right: 20px; word-break: break-word;
+  }
+  .kcard.current .kc-title { color: var(--bar); }
+  .kcard .kc-note {
+    margin-top: 5px; font-size: 12px; color: var(--muted); line-height: 1.4;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .kcard .kc-edit {
+    position: absolute; top: 6px; right: 6px; border: none; background: none; color: var(--muted);
+    cursor: pointer; padding: 2px 4px; border-radius: 5px; font-size: 11px; opacity: 0; line-height: 1;
+  }
+  .kcard:hover .kc-edit { opacity: 1; }
+  .kcard .kc-edit:hover { background: var(--weekend); color: var(--ink); }
+  .kcard-add {
+    border: 1.5px dashed var(--grid); background: none; color: var(--muted); font-weight: 600;
+    border-radius: 8px; padding: 8px; cursor: pointer; font-size: 12.5px; text-align: center;
+  }
+  .kcard-add:hover { border-color: var(--bar); color: var(--bar); background: var(--panel); }
+
+  /* card editor modal */
+  .modal-back {
+    position: fixed; inset: 0; background: rgba(35,42,49,0.35); z-index: 60;
+    display: none; align-items: flex-start; justify-content: center; padding: 12vh 16px 16px;
+  }
+  .modal-back.open { display: flex; }
+  .modal {
+    background: var(--panel); border: 1.5px solid var(--grid); border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.22); width: 100%; max-width: 440px; padding: 18px;
+  }
+  .modal h3 { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+  .modal .field { margin-bottom: 14px; }
+  .modal label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 5px; }
+  .modal input[type="text"], .modal textarea {
+    width: 100%; font-family: var(--sans); font-size: 14px; padding: 8px 10px;
+    border: 1.5px solid var(--grid); border-radius: 6px; color: var(--ink); background: var(--panel);
+  }
+  .modal textarea { min-height: 84px; resize: vertical; line-height: 1.45; }
+  .modal input:focus, .modal textarea:focus { outline: none; border-color: var(--bar); }
+  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; }
+
   /* ---------- chart ---------- */
   .chart-wrap {
     background: var(--panel); border: 1.5px solid var(--grid); border-radius: 10px;
@@ -340,6 +435,17 @@
 </head>
 <body>
 
+<section class="kanban" id="kanban" style="display:none">
+  <div class="kanban-head">
+    <h2>Board</h2>
+    <span class="kcount" id="kanbanCount"></span>
+    <span class="spacer"></span>
+    <button class="quiet" id="kanbanCollapse" title="Show/hide the board">Collapse</button>
+    <button id="kanbanAddCol">+ Column</button>
+  </div>
+  <div class="kanban-body" id="kanbanCols"></div>
+</section>
+
 <div class="projectbar" id="projectbar" style="display:none">
   <div class="projmenu-wrap">
     <button class="projmenu-btn" id="projMenuBtn" aria-haspopup="true" aria-expanded="false">
@@ -458,6 +564,24 @@
   Keywords flip to <code>DONE</code> at 100%. The file opens cleanly in Emacs: agenda, clocking, and archiving all work.
 </p>
 
+<div class="modal-back" id="cardModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle">
+    <h3 id="cardModalTitle">Edit card</h3>
+    <div class="field">
+      <label for="cardTitle">Title</label>
+      <input type="text" id="cardTitle" />
+    </div>
+    <div class="field">
+      <label for="cardNote">Notes</label>
+      <textarea id="cardNote" placeholder="Anything you want to remember about this project…"></textarea>
+    </div>
+    <div class="actions">
+      <button class="quiet" id="cardCancel">Cancel</button>
+      <button class="primary" id="cardSave">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -480,7 +604,8 @@
   let bufferDirty = false;
   let MODE = "standalone";          // "server" | "demo" | "standalone" (chosen at boot)
   let currentProjectId = null;      // server/demo: the .org filename being edited
-  let projects = [];                // server/demo: recent project list
+  let projects = [];                // server/demo: recent project list (also the kanban cards)
+  let board = { columns: [] };      // ordered kanban columns (from kanban.org)
   const collapsed = new Set();
   let uid = 1;
   function nextId() { return "i" + (uid++); }
@@ -591,6 +716,9 @@
     lines.push("#+TITLE: " + st.title);
     if (st.targetDate) lines.push("#+TARGET_DATE: " + orgStamp(st.targetDate));
     lines.push("#+TODO: TODO | DONE");
+    if (st.kanbanColumn) lines.push("#+KANBAN_COLUMN: " + st.kanbanColumn);
+    if (st.kanbanOrder != null) lines.push("#+KANBAN_ORDER: " + st.kanbanOrder);
+    if (st.kanbanNote) lines.push("#+KANBAN_NOTE: " + st.kanbanNote);
     lines.push("");
     for (const it of st.items) {
       if (isGroup(it)) {
@@ -605,7 +733,8 @@
   }
 
   function parseOrg(text) {
-    const st = { title: "Untitled project", targetDate: null, items: [] };
+    const st = { title: "Untitled project", targetDate: null, items: [],
+                 kanbanColumn: null, kanbanOrder: null, kanbanNote: null };
     const lines = text.split(/\r?\n/);
     let cur = null;       // heading currently receiving metadata lines
     let curTop = null;    // current top-level item (potential parent)
@@ -618,6 +747,10 @@
       if ((m = line.match(/^#\+TARGET_DATE:\s*(.+)$/i))) {
         const s = m[1].match(stampRe); if (s) st.targetDate = s[1]; continue;
       }
+      // Kanban card fields — preserved verbatim so chart edits never drop them.
+      if ((m = line.match(/^#\+KANBAN_COLUMN:\s*(.+)$/i))) { st.kanbanColumn = m[1].trim(); continue; }
+      if ((m = line.match(/^#\+KANBAN_ORDER:\s*(-?\d+)/i))) { st.kanbanOrder = parseInt(m[1], 10); continue; }
+      if ((m = line.match(/^#\+KANBAN_NOTE:\s*(.*)$/i))) { st.kanbanNote = m[1].trim(); continue; }
       if ((m = line.match(/^(\*+)\s+(?:(TODO|DONE|NEXT|WAIT|WAITING|CANCELLED)\s+)?(.*)$/))) {
         const level = m[1].length;
         const kw = m[2] || null;
@@ -880,6 +1013,13 @@
               method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
             }).then((r) => r.json()),
     del:    (id) => fetch("/api/projects/" + encodeURIComponent(id), { method: "DELETE" }).then((r) => r.json()),
+    board:  () => fetch("/api/board").then((r) => (r.ok ? r.json() : Promise.reject(new Error("board failed")))),
+    saveBoard: (columns) => fetch("/api/board", {
+              method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ columns }),
+            }).then((r) => (r.ok ? r.json() : Promise.reject(new Error("board save failed")))),
+    patch:  (id, fields) => fetch("/api/projects/" + encodeURIComponent(id), {
+              method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields),
+            }).then((r) => (r.ok ? r.json() : Promise.reject(new Error("card save failed")))),
   };
 
   let saveTimer = null;
@@ -914,6 +1054,7 @@
   async function loadProjectList() {
     try { projects = await api.list(); } catch (e) { projects = []; }
     renderProjectMenu();
+    renderBoard();
   }
   function renderProjectMenu() {
     const list = document.getElementById("projList");
@@ -997,6 +1138,7 @@
       const b = document.getElementById(id); if (b) b.style.display = "none";
     });
     document.getElementById("demoFlag").hidden = !cfg.demo;
+    setupBoardUI();
     document.getElementById("projMenuBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleProjectMenu(); });
     document.getElementById("projNew").addEventListener("click", newProject);
     document.addEventListener("click", (e) => {
@@ -1004,6 +1146,343 @@
       if (menu && !menu.hidden && !menu.parentNode.contains(e.target)) closeProjectMenu();
     });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeProjectMenu(); });
+  }
+
+  // ---------- kanban board ----------
+  // Each card is a project (.org file). A card's column / order / note live in that
+  // project's own file (KANBAN_* header keywords); the ordered column list lives in
+  // kanban.org. The board is a server/demo feature (it needs the multi-file listing);
+  // standalone mode has a single linked file and no board.
+  function boardActive() { return MODE === "server" || MODE === "demo"; }
+  function projById(id) { return projects.find((p) => p.id === id) || null; }
+  // Visible column of a card: its stored column if that column still exists, else the
+  // first column (so a card is never lost when its column is renamed/removed).
+  function colOf(p) {
+    return (p.column && board.columns.includes(p.column)) ? p.column : board.columns[0];
+  }
+
+  async function loadBoard() {
+    if (!boardActive()) return;
+    try { const r = await api.board(); board.columns = r.columns || []; }
+    catch (e) { board.columns = []; }
+    renderBoard();
+  }
+
+  // Group the current projects into their columns (unknown/absent column → first one),
+  // each column sorted by KANBAN_ORDER then name.
+  function groupCards() {
+    const cols = board.columns.slice();
+    const groups = new Map(cols.map((c) => [c, []]));
+    if (!cols.length) return { cols, groups };
+    for (const p of projects) groups.get(colOf(p)).push(p);
+    for (const arr of groups.values()) {
+      arr.sort((a, b) => {
+        const ao = a.order == null ? Infinity : a.order;
+        const bo = b.order == null ? Infinity : b.order;
+        if (ao !== bo) return ao - bo;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+    }
+    return { cols, groups };
+  }
+
+  let drag = null;     // { kind: "card", id } | { kind: "col", index }
+
+  function renderBoard() {
+    const wrap = document.getElementById("kanbanCols");
+    if (!wrap || !boardActive()) return;
+    const { cols, groups } = groupCards();
+    document.getElementById("kanbanCount").textContent =
+      projects.length + (projects.length === 1 ? " project" : " projects");
+    wrap.innerHTML = "";
+    if (!cols.length) {
+      const hint = document.createElement("div");
+      hint.className = "empty-hint";
+      hint.textContent = "No columns yet — add one to start organizing your projects.";
+      wrap.appendChild(hint);
+      return;
+    }
+    cols.forEach((name, ci) => wrap.appendChild(renderColumn(name, ci, groups.get(name) || [])));
+  }
+
+  function renderColumn(name, ci, cards) {
+    const col = document.createElement("div");
+    col.className = "kcol";
+    col.dataset.col = name;
+
+    const head = document.createElement("div");
+    head.className = "kcol-head";
+    head.draggable = true;
+    head.innerHTML =
+      '<span class="kcol-name"></span>' +
+      '<span class="kcol-n"></span>' +
+      '<button class="kbtn ren" title="Rename column">✎</button>' +
+      '<button class="kbtn del" title="Delete column">✕</button>';
+    head.querySelector(".kcol-name").textContent = name;
+    head.querySelector(".kcol-n").textContent = cards.length;
+    head.querySelector(".ren").addEventListener("click", (e) => { e.stopPropagation(); renameColumn(ci); });
+    head.querySelector(".del").addEventListener("click", (e) => { e.stopPropagation(); deleteColumn(ci); });
+    head.querySelectorAll(".kbtn").forEach((b) => (b.draggable = false));
+    // column drag-to-reorder
+    head.addEventListener("dragstart", (e) => {
+      drag = { kind: "col", index: ci };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "col:" + ci);
+    });
+    head.addEventListener("dragend", () => { drag = null; clearDropMarks(); });
+    col.addEventListener("dragover", (e) => {
+      if (!drag || drag.kind !== "col") return;
+      e.preventDefault();
+      clearDropMarks();
+      col.classList.add("drop-before");
+    });
+    col.addEventListener("drop", (e) => {
+      if (!drag || drag.kind !== "col") return;
+      e.preventDefault();
+      reorderColumns(drag.index, ci);
+    });
+    col.appendChild(head);
+
+    const list = document.createElement("div");
+    list.className = "kcol-list";
+    list.dataset.col = name;
+    cards.forEach((p) => list.appendChild(renderCard(p)));
+    const add = document.createElement("button");
+    add.className = "kcard-add";
+    add.textContent = "+ Add card";
+    add.draggable = false;
+    add.addEventListener("click", () => addCard(name));
+    list.appendChild(add);
+    // card drop target
+    list.addEventListener("dragover", (e) => {
+      if (!drag || drag.kind !== "card") return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      markCardDrop(list, e.clientY);
+    });
+    list.addEventListener("dragleave", (e) => {
+      if (!drag || drag.kind !== "card") return;
+      if (!list.contains(e.relatedTarget)) list.classList.remove("dragover");
+    });
+    list.addEventListener("drop", (e) => {
+      if (!drag || drag.kind !== "card") return;
+      e.preventDefault();
+      const index = cardDropIndex(list, e.clientY);
+      moveCard(drag.id, name, index);
+    });
+    col.appendChild(list);
+    return col;
+  }
+
+  function renderCard(p) {
+    const card = document.createElement("div");
+    card.className = "kcard" + (p.id === currentProjectId ? " current" : "");
+    card.dataset.id = p.id;
+    card.draggable = true;
+    const title = document.createElement("div");
+    title.className = "kc-title";
+    title.textContent = p.name || p.id;
+    card.appendChild(title);
+    if (p.note) {
+      const note = document.createElement("div");
+      note.className = "kc-note";
+      note.textContent = p.note;
+      card.appendChild(note);
+    }
+    const edit = document.createElement("button");
+    edit.className = "kc-edit";
+    edit.textContent = "✎";
+    edit.title = "Edit title & notes";
+    edit.draggable = false;
+    edit.addEventListener("click", (e) => { e.stopPropagation(); openCardEditor(p.id); });
+    card.appendChild(edit);
+    card.addEventListener("click", () => openProject(p.id));
+    card.addEventListener("dragstart", (e) => {
+      drag = { kind: "card", id: p.id };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", "card:" + p.id);
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => { drag = null; card.classList.remove("dragging"); clearDropMarks(); });
+    return card;
+  }
+
+  // -- drop indicators --
+  function cardEls(list) {
+    return Array.from(list.querySelectorAll(".kcard"));
+  }
+  function cardDropIndex(list, y) {
+    const els = cardEls(list);
+    for (let i = 0; i < els.length; i++) {
+      const r = els[i].getBoundingClientRect();
+      if (y < r.top + r.height / 2) return i;
+    }
+    return els.length;
+  }
+  function markCardDrop(list, y) {
+    clearDropMarks();
+    list.classList.add("dragover");
+    const els = cardEls(list);
+    const i = cardDropIndex(list, y);
+    if (i < els.length) els[i].classList.add("drop-before");
+  }
+  function clearDropMarks() {
+    document.querySelectorAll(".kcol-list.dragover").forEach((e) => e.classList.remove("dragover"));
+    document.querySelectorAll(".kcard.drop-before").forEach((e) => e.classList.remove("drop-before"));
+    document.querySelectorAll(".kcol.drop-before").forEach((e) => e.classList.remove("drop-before"));
+  }
+
+  // -- persistence for a single card. For the open project, mirror into `state` and
+  //    let the normal full-file autosave carry it (avoids a racing PATCH). Otherwise
+  //    PATCH just the changed keywords in that project's file. --
+  function applyCardEdit(id, fields) {
+    const p = projById(id);
+    if (p) {
+      if ("column" in fields) p.column = fields.column;
+      if ("order" in fields) p.order = fields.order;
+      if ("note" in fields) p.note = fields.note;
+      if ("title" in fields) p.name = fields.title;
+    }
+    if (id === currentProjectId && state) {
+      if ("column" in fields) state.kanbanColumn = fields.column;
+      if ("order" in fields) state.kanbanOrder = fields.order;
+      if ("note" in fields) state.kanbanNote = fields.note || null;
+      if ("title" in fields) {
+        state.title = fields.title;
+        const t = document.getElementById("projectTitle"); if (t) t.value = fields.title;
+        updateProjectButton(); renderHeader();
+      }
+      saveStorage();
+    } else {
+      api.patch(id, fields).catch(() => setSaveStatus("error"));
+    }
+  }
+
+  // Move a card into `colName` at visual position `index`, renumbering that column
+  // (step 10) and persisting only the cards whose order/column actually changed.
+  function moveCard(id, colName, index) {
+    const moved = projById(id);
+    if (!moved) return;
+    const { groups } = groupCards();
+    const arr = (groups.get(colName) || []).filter((p) => p.id !== id);
+    index = Math.max(0, Math.min(index, arr.length));
+    arr.splice(index, 0, moved);
+    arr.forEach((p, i) => {
+      const newOrder = i * 10;
+      const fields = {};
+      if (p.order !== newOrder) fields.order = newOrder;
+      if (p.id === id && p.column !== colName) fields.column = colName;
+      if (Object.keys(fields).length) applyCardEdit(p.id, fields);
+    });
+    renderBoard();
+  }
+
+  async function addCard(colName) {
+    const name = (prompt("New project (card) name:", "Untitled project") || "").trim();
+    if (!name) return;
+    let p;
+    try { p = await api.create(name); } catch (e) { setSaveStatus("error"); return; }
+    const same = projects.filter((x) => colOf(x) === colName);
+    const maxOrder = same.reduce((m, x) => Math.max(m, x.order == null ? -1 : x.order), -1);
+    try { await api.patch(p.id, { column: colName, order: maxOrder + 10 }); }
+    catch (e) { /* card still exists, just unpositioned */ }
+    await loadProjectList();
+  }
+
+  // -- column operations (persist the whole list to kanban.org) --
+  async function saveColumns() {
+    if (MODE === "demo") { try { await api.saveBoard(board.columns); } catch (_) {} return; }
+    try { await api.saveBoard(board.columns); } catch (e) { setSaveStatus("error"); }
+  }
+  function addColumn() {
+    const name = (prompt("New column name:", "") || "").trim();
+    if (!name) return;
+    if (board.columns.includes(name)) { alert("A column with that name already exists."); return; }
+    board.columns.push(name);
+    saveColumns(); renderBoard();
+  }
+  function renameColumn(ci) {
+    const old = board.columns[ci];
+    const name = (prompt("Rename column:", old) || "").trim();
+    if (!name || name === old) return;
+    if (board.columns.includes(name)) { alert("A column with that name already exists."); return; }
+    board.columns[ci] = name;
+    // Cards that explicitly named the old column follow the rename. (Cards with no
+    // column keyword only ever sit in the first column and need no rewrite.)
+    projects.filter((p) => p.column === old).forEach((p) => applyCardEdit(p.id, { column: name }));
+    saveColumns(); renderBoard();
+  }
+  function deleteColumn(ci) {
+    if (board.columns.length <= 1) { alert("Keep at least one column."); return; }
+    const name = board.columns[ci];
+    const visible = groupCards().groups.get(name) || [];
+    const target = board.columns[ci - 1] || board.columns[ci + 1];
+    if (visible.length && !confirm('Delete "' + name + '"? Its ' + visible.length +
+        ' card' + (visible.length === 1 ? "" : "s") + ' will move to "' + target + '".')) return;
+    let base = projects.filter((p) => colOf(p) === target)
+      .reduce((m, x) => Math.max(m, x.order == null ? -1 : x.order), -1);
+    projects.filter((p) => p.column === name).forEach((p) => { base += 10; applyCardEdit(p.id, { column: target, order: base }); });
+    board.columns.splice(ci, 1);
+    saveColumns(); renderBoard();
+  }
+  function reorderColumns(from, to) {
+    if (from === to) { clearDropMarks(); return; }
+    const [moved] = board.columns.splice(from, 1);
+    board.columns.splice(to, 0, moved);
+    saveColumns(); renderBoard();
+  }
+
+  // -- card editor modal (title + notes) --
+  let editingCardId = null;
+  function openCardEditor(id) {
+    const p = projById(id);
+    if (!p) return;
+    editingCardId = id;
+    document.getElementById("cardTitle").value = p.name || "";
+    document.getElementById("cardNote").value = p.note || "";
+    document.getElementById("cardModal").classList.add("open");
+    setTimeout(() => document.getElementById("cardTitle").focus(), 0);
+  }
+  function closeCardEditor() {
+    editingCardId = null;
+    document.getElementById("cardModal").classList.remove("open");
+  }
+  function saveCardEditor() {
+    if (!editingCardId) return closeCardEditor();
+    const title = document.getElementById("cardTitle").value.trim();
+    const note = document.getElementById("cardNote").value.replace(/\s*\n\s*/g, " ").trim();
+    const fields = { note };
+    if (title) fields.title = title;
+    applyCardEdit(editingCardId, fields);
+    closeCardEditor();
+    renderBoard();
+  }
+
+  function setupBoardUI() {
+    document.getElementById("kanban").style.display = "";
+    document.getElementById("kanbanAddCol").addEventListener("click", addColumn);
+    const collapseBtn = document.getElementById("kanbanCollapse");
+    const kanban = document.getElementById("kanban");
+    let collapsed = false;
+    try { collapsed = localStorage.getItem("org-gantt-kanban-collapsed") === "1"; } catch (_) {}
+    function applyCollapse() {
+      kanban.classList.toggle("collapsed", collapsed);
+      collapseBtn.textContent = collapsed ? "Expand" : "Collapse";
+    }
+    applyCollapse();
+    collapseBtn.addEventListener("click", () => {
+      collapsed = !collapsed;
+      try { localStorage.setItem("org-gantt-kanban-collapsed", collapsed ? "1" : "0"); } catch (_) {}
+      applyCollapse();
+    });
+    document.getElementById("cardSave").addEventListener("click", saveCardEditor);
+    document.getElementById("cardCancel").addEventListener("click", closeCardEditor);
+    document.getElementById("cardModal").addEventListener("click", (e) => {
+      if (e.target.id === "cardModal") closeCardEditor();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && document.getElementById("cardModal").classList.contains("open")) closeCardEditor();
+    });
   }
 
   // ---------- range ----------
@@ -1655,6 +2134,11 @@
   document.getElementById("projectTitle").addEventListener("change", (e) => {
     state.title = e.target.value || "Untitled project";
     render(); saveStorage();
+    if (boardActive() && currentProjectId) {
+      const p = projById(currentProjectId);
+      if (p) { p.name = state.title; renderBoard(); }
+      updateProjectButton();
+    }
   });
   document.getElementById("targetDate").addEventListener("change", (e) => {
     state.targetDate = e.target.value || null;
@@ -1672,6 +2156,7 @@
       // Served by the backend: files live on disk (server) or are samples (demo).
       MODE = cfg.demo ? "demo" : "server";
       setupServerUI(cfg);
+      await loadBoard();
       await loadProjectList();
       let openId = null;
       try { openId = localStorage.getItem("org-gantt-last"); } catch (_) {}

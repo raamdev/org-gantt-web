@@ -31,6 +31,96 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]*\.org$")
 TITLE_RE = re.compile(r"^#\+TITLE:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
+# The kanban board. Its ordered column list lives in a plain .org file (one heading
+# per column) alongside the projects, so it round-trips with Emacs like everything
+# else. It is NOT itself a project — excluded from the project list. Each project's
+# card state (which column, sort order, note) lives in that project's own .org file
+# as header keywords, so a project's board status travels with the project file.
+BOARD_NAME = "kanban.org"
+DEFAULT_COLUMNS = ["Next up", "In progress", "Done"]
+KAN_COLUMN_RE = re.compile(r"^#\+KANBAN_COLUMN:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+KAN_ORDER_RE = re.compile(r"^#\+KANBAN_ORDER:\s*(-?\d+)", re.IGNORECASE | re.MULTILINE)
+KAN_NOTE_RE = re.compile(r"^#\+KANBAN_NOTE:\s*(.*)$", re.IGNORECASE | re.MULTILINE)
+HEADING_RE = re.compile(r"^\*+\s")
+
+
+def kanban_of(text):
+    """Pull a project's card fields (column, order, note) out of its org header."""
+    text = text or ""
+    mc = KAN_COLUMN_RE.search(text)
+    mo = KAN_ORDER_RE.search(text)
+    mn = KAN_NOTE_RE.search(text)
+    return {
+        "column": mc.group(1).strip() if mc else None,
+        "order": int(mo.group(1)) if mo else None,
+        "note": mn.group(1).strip() if mn else "",
+    }
+
+
+def set_header_keyword(text, key, value):
+    """Insert/replace/remove a `#+KEY: value` line in the header block (everything
+    before the first `*` heading). value=None removes the line. Returns new text.
+    Keeps unrelated keywords and body untouched so the file round-trips cleanly."""
+    lines = (text or "").split("\n")
+    hstart = len(lines)
+    for i, ln in enumerate(lines):
+        if HEADING_RE.match(ln):
+            hstart = i
+            break
+    key_re = re.compile(r"^#\+" + re.escape(key) + r":", re.IGNORECASE)
+    idx, last_kw = None, -1
+    for i in range(hstart):
+        if lines[i].startswith("#+"):
+            last_kw = i
+            if key_re.match(lines[i]):
+                idx = i
+    if value is None:
+        if idx is not None:
+            del lines[idx]
+        return "\n".join(lines)
+    newline = "#+%s: %s" % (key, value)
+    if idx is not None:
+        lines[idx] = newline
+    else:
+        lines.insert(last_kw + 1 if last_kw >= 0 else 0, newline)
+    return "\n".join(lines)
+
+
+def apply_card_patch(text, fields):
+    """Apply a partial card edit (title / note / column / order) to org text by
+    editing the corresponding header keywords in place. Shared by both stores."""
+    def clean(v):
+        return re.sub(r"\s+", " ", str(v)).strip()
+
+    if "title" in fields and clean(fields["title"]):
+        text = set_header_keyword(text, "TITLE", clean(fields["title"]))
+    if "column" in fields:
+        v = fields["column"]
+        text = set_header_keyword(text, "KANBAN_COLUMN", clean(v) if v and clean(v) else None)
+    if "order" in fields:
+        v = fields["order"]
+        text = set_header_keyword(text, "KANBAN_ORDER", None if v is None else str(int(v)))
+    if "note" in fields:
+        v = fields["note"]
+        text = set_header_keyword(text, "KANBAN_NOTE", clean(v) if v and clean(v) else None)
+    return text
+
+
+def parse_columns(text):
+    """The board's columns are just the top-level headings of kanban.org."""
+    cols = []
+    for ln in (text or "").split("\n"):
+        m = re.match(r"^\*+\s+(.+?)\s*$", ln)
+        if m and m.group(1).strip():
+            cols.append(m.group(1).strip())
+    return cols
+
+
+def board_text(columns):
+    lines = ["#+TITLE: Project board", ""]
+    lines += ["* " + c for c in columns]
+    return "\n".join(lines) + "\n"
+
 
 def log(msg):
     """Timestamped line to stdout (flushed so it shows up live under the server)."""
@@ -116,7 +206,7 @@ class FileStore:
         opened = self._load_state().get("opened_at", {})
         out = []
         for name in os.listdir(self.root):
-            if name.startswith(".") or not name.endswith(".org"):
+            if name.startswith(".") or not name.endswith(".org") or name == BOARD_NAME:
                 continue
             p = os.path.join(self.root, name)
             if not os.path.isfile(p):
@@ -127,15 +217,62 @@ class FileStore:
             except OSError:
                 continue
             mtime = os.path.getmtime(p)
+            card = kanban_of(head)
             out.append({
                 "id": name,
                 "name": title_of(head, name[:-4]),
                 "mtime": mtime,
                 "recent": max(mtime, opened.get(name, 0)),
                 "size": os.path.getsize(p),
+                "column": card["column"],
+                "order": card["order"],
+                "note": card["note"],
             })
         out.sort(key=lambda x: x["recent"], reverse=True)
         return out
+
+    # -- kanban board (column list persisted as headings in kanban.org) --
+    def _board_path(self):
+        return os.path.join(self.root, BOARD_NAME)
+
+    def board(self):
+        p = self._board_path()
+        if os.path.exists(p):
+            try:
+                with open(p, encoding="utf-8") as f:
+                    cols = parse_columns(f.read())
+                if cols:
+                    return cols
+            except OSError:
+                pass
+        self.write_board(list(DEFAULT_COLUMNS))     # lazy-init on first run
+        log("created %s (default columns)" % BOARD_NAME)
+        return list(DEFAULT_COLUMNS)
+
+    def write_board(self, columns):
+        cols = [str(c).strip() for c in columns if str(c).strip()]
+        p = self._board_path()
+        with self.lock:
+            tmp = p + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(board_text(cols))
+            os.replace(tmp, p)
+        return {"columns": cols}
+
+    def patch(self, pid, fields):
+        """In-place edit of a project's card keywords. Does NOT bump 'recently
+        opened' — dragging a card around shouldn't reshuffle the project switcher."""
+        p = self._resolve(pid)
+        with self.lock:
+            with open(p, encoding="utf-8") as f:
+                text = f.read()
+            text = apply_card_patch(text, fields)
+            tmp = p + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write(text)
+            os.replace(tmp, p)
+        card = kanban_of(text)
+        return {"id": pid, "name": title_of(text, pid[:-4]), **card}
 
     def read(self, pid):
         p = self._resolve(pid)
@@ -185,12 +322,15 @@ class DemoStore:
 
     def __init__(self):
         self.samples = _demo_samples()
+        self.columns = list(DEFAULT_COLUMNS)
 
     def list(self):
         out = []
         for i, (pid, text) in enumerate(self.samples.items()):
+            card = kanban_of(text)
             out.append({"id": pid, "name": title_of(text, pid[:-4]),
-                        "mtime": 0, "recent": len(self.samples) - i, "size": len(text)})
+                        "mtime": 0, "recent": len(self.samples) - i, "size": len(text),
+                        "column": card["column"], "order": card["order"], "note": card["note"]})
         return out
 
     def read(self, pid):
@@ -200,14 +340,37 @@ class DemoStore:
                 "text": self.samples[pid], "mtime": 0}
 
     def write(self, pid, text):
-        return {"id": pid, "mtime": 0}          # accepted but not persisted
+        if pid in self.samples:
+            self.samples[pid] = text            # in memory only; never touches disk
+        return {"id": pid, "mtime": 0}
 
     def create(self, name):
-        pid = slugify(name) + ".org"
-        return {"id": pid, "name": name, "text": starter_org(name or "New project"), "mtime": 0}
+        base = slugify(name)
+        pid, n = base + ".org", 2
+        while pid in self.samples:
+            pid = "%s-%d.org" % (base, n); n += 1
+        text = starter_org(name or "New project")
+        self.samples[pid] = text                # in-session only, so demo feels real
+        return {"id": pid, "name": name, "text": text, "mtime": 0}
 
     def delete(self, pid):
+        self.samples.pop(pid, None)
         return {"ok": True}
+
+    # -- board / card edits: in-memory so a demo visitor can play, never persisted --
+    def board(self):
+        return list(self.columns)
+
+    def write_board(self, columns):
+        self.columns = [str(c).strip() for c in columns if str(c).strip()]
+        return {"columns": list(self.columns)}
+
+    def patch(self, pid, fields):
+        if pid not in self.samples:
+            raise KeyError(pid)
+        self.samples[pid] = apply_card_patch(self.samples[pid], fields)
+        card = kanban_of(self.samples[pid])
+        return {"id": pid, "name": title_of(self.samples[pid], pid[:-4]), **card}
 
 
 # A rich, realistic demo: 5 phases (each with child tasks), 3 milestones, a target
@@ -218,6 +381,9 @@ _ORBIT_ORG = """\
 #+TITLE: Orbit — Product Launch
 #+TARGET_DATE: <2026-10-30 Fri>
 #+TODO: TODO | DONE
+#+KANBAN_COLUMN: In progress
+#+KANBAN_ORDER: 0
+#+KANBAN_NOTE: Beta rollout targeted for late October
 
 * DONE Discovery & research [3/3]
 ** DONE Competitive analysis
@@ -323,6 +489,9 @@ _LOFT_ORG = """\
 #+TITLE: Loft Renovation
 #+TARGET_DATE: <2026-10-16 Fri>
 #+TODO: TODO | DONE
+#+KANBAN_COLUMN: Next up
+#+KANBAN_ORDER: 0
+#+KANBAN_NOTE: Waiting on the permit to clear
 
 * DONE Demolition & prep [2/2]
 ** DONE Clear & protect the space
@@ -447,6 +616,8 @@ class Handler(BaseHTTPRequestHandler):
             })
         if path == "/api/projects":
             return self._send_json(self.store.list())
+        if path == "/api/board":
+            return self._send_json({"columns": self.store.board()})
         m = re.match(r"^/api/projects/([^/]+)$", path)
         if m:
             pid = unquote(m.group(1))
@@ -471,6 +642,17 @@ class Handler(BaseHTTPRequestHandler):
         return self._send_json({"error": "not found"}, 404)
 
     def do_PUT(self):
+        if self._path() == "/api/board":
+            cols = self._body_json().get("columns")
+            if not isinstance(cols, list):
+                return self._send_json({"error": "missing columns"}, 400)
+            try:
+                result = self.store.write_board(cols)
+                if not self.store.demo:
+                    log("board columns: %s" % " | ".join(result["columns"]))
+                return self._send_json(result)
+            except (OSError, ValueError) as e:
+                return self._send_json({"error": str(e)}, 400)
         m = re.match(r"^/api/projects/([^/]+)$", self._path())
         if m:
             pid = unquote(m.group(1))
@@ -482,6 +664,22 @@ class Handler(BaseHTTPRequestHandler):
                 if not self.store.demo:
                     log("updated %s (%d bytes)" % (pid, len(text.encode("utf-8"))))
                 return self._send_json(result)
+            except (OSError, ValueError) as e:
+                return self._send_json({"error": str(e)}, 400)
+        return self._send_json({"error": "not found"}, 404)
+
+    def do_PATCH(self):
+        m = re.match(r"^/api/projects/([^/]+)$", self._path())
+        if m:
+            pid = unquote(m.group(1))
+            fields = self._body_json()
+            try:
+                result = self.store.patch(pid, fields)
+                if not self.store.demo:
+                    log("carded %s (%s)" % (pid, ", ".join(sorted(fields.keys())) or "—"))
+                return self._send_json(result)
+            except KeyError:
+                return self._send_json({"error": "not found"}, 404)
             except (OSError, ValueError) as e:
                 return self._send_json({"error": str(e)}, 400)
         return self._send_json({"error": "not found"}, 404)
