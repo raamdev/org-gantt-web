@@ -247,8 +247,10 @@
     min-height: 40px;
   }
   .kcol-list.dragover { background: var(--sel); }
+  /* Per-column card colors: --kc-bg / --kc-fg are set inline on each card (fall back
+     to the theme tokens when a column has no custom color). */
   .kcard {
-    background: var(--panel); border: 1.5px solid var(--grid); border-radius: 8px;
+    background: var(--kc-bg, var(--panel)); border: 1.5px solid var(--grid); border-radius: 8px;
     padding: 9px 10px; cursor: grab; position: relative;
     box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   }
@@ -256,17 +258,18 @@
   .kcard:active { cursor: grabbing; }
   .kcard.dragging { opacity: 0.4; }
   .kcard.drop-before { box-shadow: inset 0 3px 0 -1px var(--accent); }
+  .kcard.current { border-color: var(--bar); box-shadow: inset 3px 0 0 var(--bar); }
   .kcard .kc-title {
-    font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.3;
+    font-size: 13px; font-weight: 600; color: var(--kc-fg, var(--ink)); line-height: 1.3;
     padding-right: 20px; word-break: break-word;
   }
-  .kcard.current .kc-title { color: var(--bar); }
   .kcard .kc-note {
-    margin-top: 5px; font-size: 12px; color: var(--muted); line-height: 1.4;
+    margin-top: 5px; font-size: 12px; color: var(--kc-fg, var(--muted)); line-height: 1.4;
     white-space: pre-wrap; word-break: break-word;
   }
+  .kcard.kc-colored .kc-note { opacity: 0.78; }   /* custom text color: subdue the note a touch */
   .kcard .kc-edit {
-    position: absolute; top: 6px; right: 6px; border: none; background: none; color: var(--muted);
+    position: absolute; top: 6px; right: 6px; border: none; background: none; color: var(--kc-fg, var(--muted));
     cursor: pointer; padding: 2px 4px; border-radius: 5px; font-size: 11px; opacity: 0; line-height: 1;
   }
   .kcard:hover .kc-edit { opacity: 1; }
@@ -297,6 +300,15 @@
   .modal textarea { min-height: 84px; resize: vertical; line-height: 1.45; }
   .modal input:focus, .modal textarea:focus { outline: none; border-color: var(--bar); }
   .modal .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .colorrow { display: flex; align-items: center; gap: 10px; }
+  .colorrow input[type="color"] {
+    width: 46px; height: 32px; padding: 2px; border: 1.5px solid var(--grid);
+    border-radius: 6px; background: var(--panel); cursor: pointer; flex: none;
+  }
+  .colorrow .swatchval { font-family: var(--mono); font-size: 12px; color: var(--muted); flex: 1; }
+  .colorrow button { padding: 4px 10px; font-size: 12px; }
+  .modal .kcard.preview { cursor: default; box-shadow: none; }
+  .modal .kcard.preview:hover { border-color: var(--grid); }
 
   /* ---------- chart ---------- */
   .chart-wrap {
@@ -670,6 +682,39 @@
   </div>
 </div>
 
+<div class="modal-back" id="colModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="colModalTitle">
+    <h3 id="colModalTitle">Column settings</h3>
+    <div class="field">
+      <label for="colBg">Card background</label>
+      <div class="colorrow">
+        <input type="color" id="colBg" aria-label="Card background color" />
+        <span class="swatchval" id="colBgVal"></span>
+        <button class="quiet" id="colBgClear" type="button">Use default</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="colFg">Card text</label>
+      <div class="colorrow">
+        <input type="color" id="colFg" aria-label="Card text color" />
+        <span class="swatchval" id="colFgVal"></span>
+        <button class="quiet" id="colFgClear" type="button">Use default</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Preview</label>
+      <div class="kcard preview" id="colPreview" draggable="false">
+        <div class="kc-title">Sample card</div>
+        <div class="kc-note">A note about this project</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="quiet" id="colCancel" type="button">Cancel</button>
+      <button class="primary" id="colSave" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -693,7 +738,7 @@
   let MODE = "standalone";          // "server" | "demo" | "standalone" (chosen at boot)
   let currentProjectId = null;      // server/demo: the .org filename being edited
   let projects = [];                // server/demo: recent project list (also the kanban cards)
-  let board = { columns: [] };      // ordered kanban columns (from kanban.org)
+  let board = { columns: [], colors: {} };   // ordered kanban columns + per-column card colors
   const collapsed = new Set();
   let uid = 1;
   function nextId() { return "i" + (uid++); }
@@ -1102,8 +1147,8 @@
             }).then((r) => r.json()),
     del:    (id) => fetch("/api/projects/" + encodeURIComponent(id), { method: "DELETE" }).then((r) => r.json()),
     board:  () => fetch("/api/board").then((r) => (r.ok ? r.json() : Promise.reject(new Error("board failed")))),
-    saveBoard: (columns) => fetch("/api/board", {
-              method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ columns }),
+    saveBoard: (columns, colors) => fetch("/api/board", {
+              method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ columns, colors }),
             }).then((r) => (r.ok ? r.json() : Promise.reject(new Error("board save failed")))),
     patch:  (id, fields) => fetch("/api/projects/" + encodeURIComponent(id), {
               method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(fields),
@@ -1251,8 +1296,8 @@
 
   async function loadBoard() {
     if (!boardActive()) return;
-    try { const r = await api.board(); board.columns = r.columns || []; }
-    catch (e) { board.columns = []; }
+    try { const r = await api.board(); board.columns = r.columns || []; board.colors = r.colors || {}; }
+    catch (e) { board.columns = []; board.colors = {}; }
     renderBoard();
   }
 
@@ -1304,10 +1349,12 @@
     head.innerHTML =
       '<span class="kcol-name"></span>' +
       '<span class="kcol-n"></span>' +
+      '<button class="kbtn gear" title="Column settings (card colors)" aria-label="Column settings">⚙</button>' +
       '<button class="kbtn ren" title="Rename column">✎</button>' +
       '<button class="kbtn del" title="Delete column">✕</button>';
     head.querySelector(".kcol-name").textContent = name;
     head.querySelector(".kcol-n").textContent = cards.length;
+    head.querySelector(".gear").addEventListener("click", (e) => { e.stopPropagation(); openColumnSettings(ci); });
     head.querySelector(".ren").addEventListener("click", (e) => { e.stopPropagation(); renameColumn(ci); });
     head.querySelector(".del").addEventListener("click", (e) => { e.stopPropagation(); deleteColumn(ci); });
     head.querySelectorAll(".kbtn").forEach((b) => (b.draggable = false));
@@ -1334,7 +1381,7 @@
     const list = document.createElement("div");
     list.className = "kcol-list";
     list.dataset.col = name;
-    cards.forEach((p) => list.appendChild(renderCard(p)));
+    cards.forEach((p) => list.appendChild(renderCard(p, name)));
     const add = document.createElement("button");
     add.className = "kcard-add";
     add.textContent = "+ Add card";
@@ -1362,11 +1409,14 @@
     return col;
   }
 
-  function renderCard(p) {
+  function renderCard(p, colName) {
     const card = document.createElement("div");
     card.className = "kcard" + (p.id === currentProjectId ? " current" : "");
     card.dataset.id = p.id;
     card.draggable = true;
+    const cc = board.colors[colName] || {};      // column's card colors, if any
+    if (cc.bg) card.style.setProperty("--kc-bg", cc.bg);
+    if (cc.fg) { card.style.setProperty("--kc-fg", cc.fg); card.classList.add("kc-colored"); }
     const title = document.createElement("div");
     title.className = "kc-title";
     title.textContent = p.name || p.id;
@@ -1479,8 +1529,8 @@
 
   // -- column operations (persist the whole list to kanban.org) --
   async function saveColumns() {
-    if (MODE === "demo") { try { await api.saveBoard(board.columns); } catch (_) {} return; }
-    try { await api.saveBoard(board.columns); } catch (e) { setSaveStatus("error"); }
+    try { await api.saveBoard(board.columns, board.colors); }
+    catch (e) { if (MODE !== "demo") setSaveStatus("error"); }
   }
   function addColumn() {
     const name = (prompt("New column name:", "") || "").trim();
@@ -1495,6 +1545,7 @@
     if (!name || name === old) return;
     if (board.columns.includes(name)) { alert("A column with that name already exists."); return; }
     board.columns[ci] = name;
+    if (board.colors[old]) { board.colors[name] = board.colors[old]; delete board.colors[old]; }  // colors follow the rename
     // Cards that explicitly named the old column follow the rename. (Cards with no
     // column keyword only ever sit in the first column and need no rewrite.)
     projects.filter((p) => p.column === old).forEach((p) => applyCardEdit(p.id, { column: name }));
@@ -1511,6 +1562,7 @@
       .reduce((m, x) => Math.max(m, x.order == null ? -1 : x.order), -1);
     projects.filter((p) => p.column === name).forEach((p) => { base += 10; applyCardEdit(p.id, { column: target, order: base }); });
     board.columns.splice(ci, 1);
+    delete board.colors[name];
     saveColumns(); renderBoard();
   }
   function reorderColumns(from, to) {
@@ -1546,6 +1598,52 @@
     renderBoard();
   }
 
+  // -- column settings modal (per-column card colors) --
+  let editColIndex = null, editBg = null, editFg = null;
+  function themeToken(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function toHex6(h) {                       // <input type=color> needs #rrggbb
+    h = (h || "").trim();
+    if (/^#[0-9a-fA-F]{3}$/.test(h)) return "#" + h.slice(1).split("").map((c) => c + c).join("");
+    return /^#[0-9a-fA-F]{6}$/.test(h) ? h.toLowerCase() : null;
+  }
+  function refreshColModal() {
+    const bgDef = toHex6(themeToken("--panel")) || "#ffffff";
+    const fgDef = toHex6(themeToken("--ink")) || "#000000";
+    document.getElementById("colBg").value = toHex6(editBg) || bgDef;
+    document.getElementById("colFg").value = toHex6(editFg) || fgDef;
+    document.getElementById("colBgVal").textContent = editBg || "default (theme)";
+    document.getElementById("colFgVal").textContent = editFg || "default (theme)";
+    const pv = document.getElementById("colPreview");
+    pv.style.setProperty("--kc-bg", editBg || bgDef);
+    pv.style.setProperty("--kc-fg", editFg || fgDef);
+    pv.classList.toggle("kc-colored", !!editFg);
+  }
+  function openColumnSettings(ci) {
+    editColIndex = ci;
+    const name = board.columns[ci];
+    const cc = board.colors[name] || {};
+    editBg = cc.bg || null;
+    editFg = cc.fg || null;
+    document.getElementById("colModalTitle").textContent = "Column settings — " + name;
+    refreshColModal();
+    document.getElementById("colModal").classList.add("open");
+  }
+  function closeColModal() {
+    editColIndex = null;
+    document.getElementById("colModal").classList.remove("open");
+  }
+  function saveColModal() {
+    if (editColIndex == null) return closeColModal();
+    const name = board.columns[editColIndex];
+    const entry = {};
+    if (editBg) entry.bg = editBg;
+    if (editFg) entry.fg = editFg;
+    if (Object.keys(entry).length) board.colors[name] = entry; else delete board.colors[name];
+    saveColumns();
+    renderBoard();
+    closeColModal();
+  }
+
   function setupBoardUI() {
     document.getElementById("kanban").style.display = "";
     document.getElementById("kanbanAddCol").addEventListener("click", addColumn);
@@ -1568,8 +1666,20 @@
     document.getElementById("cardModal").addEventListener("click", (e) => {
       if (e.target.id === "cardModal") closeCardEditor();
     });
+    // column settings modal
+    document.getElementById("colBg").addEventListener("input", (e) => { editBg = e.target.value; refreshColModal(); });
+    document.getElementById("colFg").addEventListener("input", (e) => { editFg = e.target.value; refreshColModal(); });
+    document.getElementById("colBgClear").addEventListener("click", () => { editBg = null; refreshColModal(); });
+    document.getElementById("colFgClear").addEventListener("click", () => { editFg = null; refreshColModal(); });
+    document.getElementById("colSave").addEventListener("click", saveColModal);
+    document.getElementById("colCancel").addEventListener("click", closeColModal);
+    document.getElementById("colModal").addEventListener("click", (e) => {
+      if (e.target.id === "colModal") closeColModal();
+    });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && document.getElementById("cardModal").classList.contains("open")) closeCardEditor();
+      if (e.key !== "Escape") return;
+      if (document.getElementById("cardModal").classList.contains("open")) closeCardEditor();
+      if (document.getElementById("colModal").classList.contains("open")) closeColModal();
     });
   }
 

@@ -106,19 +106,74 @@ def apply_card_patch(text, fields):
     return text
 
 
-def parse_columns(text):
-    """The board's columns are just the top-level headings of kanban.org."""
-    cols = []
+HEX_RE = re.compile(r"^#[0-9A-Fa-f]{3,8}$")
+CARD_BG_RE = re.compile(r"^:CARD_BG:\s*(\S+)", re.IGNORECASE)
+CARD_FG_RE = re.compile(r"^:CARD_FG:\s*(\S+)", re.IGNORECASE)
+
+
+def _hex_or_none(v):
+    v = (v or "").strip()
+    return v if HEX_RE.match(v) else None
+
+
+def clean_colors(names, colors):
+    """Keep only valid per-column card colors (#hex) for columns that exist."""
+    out = {}
+    for name in names:
+        c = (colors or {}).get(name) or {}
+        entry = {}
+        bg = _hex_or_none(c.get("bg"))
+        fg = _hex_or_none(c.get("fg"))
+        if bg:
+            entry["bg"] = bg
+        if fg:
+            entry["fg"] = fg
+        if entry:
+            out[name] = entry
+    return out
+
+
+def parse_board(text):
+    """Return ([names], {name: {bg?, fg?}}). Columns are the top-level headings of
+    kanban.org; a column's optional card colors live in that heading's property drawer
+    (:CARD_BG: / :CARD_FG:), so board styling round-trips with Emacs too."""
+    names, colors = [], {}
+    cur = None
     for ln in (text or "").split("\n"):
         m = re.match(r"^\*+\s+(.+?)\s*$", ln)
         if m and m.group(1).strip():
-            cols.append(m.group(1).strip())
-    return cols
+            cur = m.group(1).strip()
+            names.append(cur)
+            continue
+        if cur is None:
+            continue
+        stripped = ln.strip()
+        mb, mf = CARD_BG_RE.match(stripped), CARD_FG_RE.match(stripped)
+        if mb:
+            v = _hex_or_none(mb.group(1))
+            if v:
+                colors.setdefault(cur, {})["bg"] = v
+        elif mf:
+            v = _hex_or_none(mf.group(1))
+            if v:
+                colors.setdefault(cur, {})["fg"] = v
+    return names, colors
 
 
-def board_text(columns):
+def board_text(columns, colors=None):
+    colors = colors or {}
     lines = ["#+TITLE: Project board", ""]
-    lines += ["* " + c for c in columns]
+    for name in columns:
+        lines.append("* " + name)
+        c = colors.get(name) or {}
+        bg, fg = _hex_or_none(c.get("bg")), _hex_or_none(c.get("fg"))
+        if bg or fg:
+            lines.append(":PROPERTIES:")
+            if bg:
+                lines.append(":CARD_BG: " + bg)
+            if fg:
+                lines.append(":CARD_FG: " + fg)
+            lines.append(":END:")
     return "\n".join(lines) + "\n"
 
 
@@ -240,24 +295,25 @@ class FileStore:
         if os.path.exists(p):
             try:
                 with open(p, encoding="utf-8") as f:
-                    cols = parse_columns(f.read())
-                if cols:
-                    return cols
+                    names, colors = parse_board(f.read())
+                if names:
+                    return {"columns": names, "colors": colors}
             except OSError:
                 pass
-        self.write_board(list(DEFAULT_COLUMNS))     # lazy-init on first run
+        self.write_board(list(DEFAULT_COLUMNS), {})     # lazy-init on first run
         log("created %s (default columns)" % BOARD_NAME)
-        return list(DEFAULT_COLUMNS)
+        return {"columns": list(DEFAULT_COLUMNS), "colors": {}}
 
-    def write_board(self, columns):
-        cols = [str(c).strip() for c in columns if str(c).strip()]
+    def write_board(self, columns, colors=None):
+        names = [str(c).strip() for c in columns if str(c).strip()]
+        clean = clean_colors(names, colors)
         p = self._board_path()
         with self.lock:
             tmp = p + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
-                f.write(board_text(cols))
+                f.write(board_text(names, clean))
             os.replace(tmp, p)
-        return {"columns": cols}
+        return {"columns": names, "colors": clean}
 
     def patch(self, pid, fields):
         """In-place edit of a project's card keywords. Does NOT bump 'recently
@@ -323,6 +379,7 @@ class DemoStore:
     def __init__(self):
         self.samples = _demo_samples()
         self.columns = list(DEFAULT_COLUMNS)
+        self.colors = {}
 
     def list(self):
         out = []
@@ -359,11 +416,12 @@ class DemoStore:
 
     # -- board / card edits: in-memory so a demo visitor can play, never persisted --
     def board(self):
-        return list(self.columns)
+        return {"columns": list(self.columns), "colors": dict(self.colors)}
 
-    def write_board(self, columns):
+    def write_board(self, columns, colors=None):
         self.columns = [str(c).strip() for c in columns if str(c).strip()]
-        return {"columns": list(self.columns)}
+        self.colors = clean_colors(self.columns, colors)
+        return {"columns": list(self.columns), "colors": dict(self.colors)}
 
     def patch(self, pid, fields):
         if pid not in self.samples:
@@ -617,7 +675,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/projects":
             return self._send_json(self.store.list())
         if path == "/api/board":
-            return self._send_json({"columns": self.store.board()})
+            return self._send_json(self.store.board())
         m = re.match(r"^/api/projects/([^/]+)$", path)
         if m:
             pid = unquote(m.group(1))
@@ -643,13 +701,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         if self._path() == "/api/board":
-            cols = self._body_json().get("columns")
+            body = self._body_json()
+            cols = body.get("columns")
             if not isinstance(cols, list):
                 return self._send_json({"error": "missing columns"}, 400)
+            colors = body.get("colors") if isinstance(body.get("colors"), dict) else {}
             try:
-                result = self.store.write_board(cols)
+                result = self.store.write_board(cols, colors)
                 if not self.store.demo:
-                    log("board columns: %s" % " | ".join(result["columns"]))
+                    log("board columns: %s (%d colored)" % (" | ".join(result["columns"]), len(result["colors"])))
                 return self._send_json(result)
             except (OSError, ValueError) as e:
                 return self._send_json({"error": str(e)}, 400)

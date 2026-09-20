@@ -19,7 +19,8 @@ org-mode, so you can drag bars around in the browser and edit the same file in E
 
 - **Project board (Kanban)** — a board across the top organizes your projects into
   columns (Next up, In progress, Done, or whatever you like). Add/remove/reorder columns,
-  drag cards between them, and give each card a note. Every card is one `.org` file;
+  drag cards between them, and give each card a note. A gear on each column opens settings
+  with card background/text color pickers. Every card is one `.org` file;
   click it to open its gantt chart below. Board state lives in plain org too (see below),
   so it round-trips with Emacs. *(Server/demo mode.)*
 - **Drag to reschedule** — drag a bar left/right to move its dates (1-day steps); the
@@ -125,13 +126,18 @@ optional header keywords describing its card:
 
 The card's title is just the project's `#+TITLE`. The ordered list of columns lives in a
 `kanban.org` file in the same folder — one heading per column — which is why empty columns
-and column order survive:
+and column order survive. A column's optional card colors (set via the gear ⚙ on the
+column) live in that heading's property drawer:
 
 ```org
 #+TITLE: Project board
 
 * Next up
 * In progress
+:PROPERTIES:
+:CARD_BG: #fde7d2
+:CARD_FG: #5a3210
+:END:
 * Done
 ```
 
