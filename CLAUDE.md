@@ -203,9 +203,15 @@ Rules:
   re-`applyCardEdit` the affected cards (and carry/drop `board.colors[name]`). The card
   editor modal edits title (`#+TITLE`) + note. Collapse state is in
   `localStorage["org-gantt-kanban-collapsed"]`.
-- **Per-column card colors**: a gear (⚙) in each `.kcol-head` opens the column-settings
-  modal (`#colModal`) with two `<input type="color">` pickers (card background, card text)
-  + live preview + "Use default". Colors live in `board.colors = {name: {bg?, fg?}}`,
+- **Column header** (`.kcol-head`) is deliberately minimal: just the column name + a gear
+  (⚙). No card count. The name is **inline-editable** — click it (`startInlineRename` →
+  contentEditable, Enter/blur commit via `applyRename`, Esc cancels; the header's
+  `draggable` is toggled off during edit so a text-selection drag can't reorder the
+  column). Column reorder is still drag-the-header.
+- **Per-column card colors + delete**: the gear opens the column-settings modal
+  (`#colModal`) with two `<input type="color">` pickers (card background, card text) +
+  live preview + "Use default", plus a **Delete column** button (calls `deleteColumn`;
+  hidden when only one column remains). Colors live in `board.colors = {name: {bg?, fg?}}`,
   applied per card as inline `--kc-bg` / `--kc-fg` custom props (the `.kcard` rules fall
   back to theme tokens), and persisted via `saveColumns()` → `PUT /api/board` into the
   column's `kanban.org` property drawer. A custom `fg` adds `.kc-colored` (subdues the

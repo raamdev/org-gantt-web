@@ -233,14 +233,19 @@
   .kcol-head .kcol-name {
     font-weight: 700; font-size: 13px; color: var(--ink); flex: 1;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    cursor: text; border-radius: 4px; padding: 1px 4px; margin-left: -4px;
   }
-  .kcol-head .kcol-n { font-family: var(--mono); font-size: 11px; color: var(--muted); flex: none; }
+  .kcol-head .kcol-name:hover { background: var(--weekend); }
+  .kcol-head .kcol-name.editing {
+    overflow: visible; text-overflow: clip; cursor: text; background: var(--panel);
+    outline: 1.5px solid var(--bar); cursor: text;
+  }
   .kcol-head .kbtn {
     border: none; background: none; color: var(--muted); cursor: pointer;
-    padding: 2px 5px; border-radius: 5px; font-size: 12px; line-height: 1;
+    padding: 2px 5px; border-radius: 5px; font-size: 12px; line-height: 1; flex: none;
   }
+  .kcol-head .kbtn.gear { font-size: 20px; }
   .kcol-head .kbtn:hover { background: var(--weekend); color: var(--ink); }
-  .kcol-head .kbtn.del:hover { background: var(--accent); color: #fff; }
 
   .kcol-list {
     flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 8px;
@@ -299,7 +304,8 @@
   }
   .modal textarea { min-height: 84px; resize: vertical; line-height: 1.45; }
   .modal input:focus, .modal textarea:focus { outline: none; border-color: var(--bar); }
-  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal .actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+  .modal .actions .grow { flex: 1; }
   .colorrow { display: flex; align-items: center; gap: 10px; }
   .colorrow input[type="color"] {
     width: 46px; height: 32px; padding: 2px; border: 1.5px solid var(--grid);
@@ -709,6 +715,8 @@
       </div>
     </div>
     <div class="actions">
+      <button class="danger" id="colDelete" type="button">Delete column</button>
+      <span class="grow"></span>
       <button class="quiet" id="colCancel" type="button">Cancel</button>
       <button class="primary" id="colSave" type="button">Save</button>
     </div>
@@ -1347,16 +1355,12 @@
     head.className = "kcol-head";
     head.draggable = true;
     head.innerHTML =
-      '<span class="kcol-name"></span>' +
-      '<span class="kcol-n"></span>' +
-      '<button class="kbtn gear" title="Column settings (card colors)" aria-label="Column settings">⚙</button>' +
-      '<button class="kbtn ren" title="Rename column">✎</button>' +
-      '<button class="kbtn del" title="Delete column">✕</button>';
-    head.querySelector(".kcol-name").textContent = name;
-    head.querySelector(".kcol-n").textContent = cards.length;
+      '<span class="kcol-name" title="Click to rename"></span>' +
+      '<button class="kbtn gear" title="Column settings" aria-label="Column settings">⚙</button>';
+    const nameEl = head.querySelector(".kcol-name");
+    nameEl.textContent = name;
+    nameEl.addEventListener("click", (e) => { e.stopPropagation(); startInlineRename(nameEl, ci); });
     head.querySelector(".gear").addEventListener("click", (e) => { e.stopPropagation(); openColumnSettings(ci); });
-    head.querySelector(".ren").addEventListener("click", (e) => { e.stopPropagation(); renameColumn(ci); });
-    head.querySelector(".del").addEventListener("click", (e) => { e.stopPropagation(); deleteColumn(ci); });
     head.querySelectorAll(".kbtn").forEach((b) => (b.draggable = false));
     // column drag-to-reorder
     head.addEventListener("dragstart", (e) => {
@@ -1539,11 +1543,38 @@
     board.columns.push(name);
     saveColumns(); renderBoard();
   }
-  function renameColumn(ci) {
+  // Inline column rename: click the title, edit in place, Enter/blur commits, Esc cancels.
+  function startInlineRename(el, ci) {
+    if (el.isContentEditable) return;
+    const head = el.closest(".kcol-head");
+    head.draggable = false;            // a text-selection drag mustn't reorder the column
+    el.contentEditable = "true";
+    el.classList.add("editing");
+    el.focus();
+    const r = document.createRange(); r.selectNodeContents(el);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    function finish(commit) {
+      el.removeEventListener("keydown", onKey);
+      el.removeEventListener("blur", onBlur);
+      el.contentEditable = "false";
+      el.classList.remove("editing");
+      head.draggable = true;
+      if (commit) applyRename(ci, el.textContent);
+      else el.textContent = board.columns[ci];
+    }
+    function onKey(e) {
+      if (e.key === "Enter") { e.preventDefault(); el.blur(); }
+      else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+    }
+    function onBlur() { finish(true); }
+    el.addEventListener("keydown", onKey);
+    el.addEventListener("blur", onBlur);
+  }
+  function applyRename(ci, raw) {
     const old = board.columns[ci];
-    const name = (prompt("Rename column:", old) || "").trim();
-    if (!name || name === old) return;
-    if (board.columns.includes(name)) { alert("A column with that name already exists."); return; }
+    const name = (raw || "").replace(/\s+/g, " ").trim();
+    if (!name || name === old) { renderBoard(); return; }
+    if (board.columns.includes(name)) { alert("A column with that name already exists."); renderBoard(); return; }
     board.columns[ci] = name;
     if (board.colors[old]) { board.colors[name] = board.colors[old]; delete board.colors[old]; }  // colors follow the rename
     // Cards that explicitly named the old column follow the rename. (Cards with no
@@ -1625,6 +1656,7 @@
     editBg = cc.bg || null;
     editFg = cc.fg || null;
     document.getElementById("colModalTitle").textContent = "Column settings — " + name;
+    document.getElementById("colDelete").hidden = board.columns.length <= 1;   // keep at least one
     refreshColModal();
     document.getElementById("colModal").classList.add("open");
   }
@@ -1666,13 +1698,22 @@
     document.getElementById("cardModal").addEventListener("click", (e) => {
       if (e.target.id === "cardModal") closeCardEditor();
     });
-    // column settings modal
-    document.getElementById("colBg").addEventListener("input", (e) => { editBg = e.target.value; refreshColModal(); });
-    document.getElementById("colFg").addEventListener("input", (e) => { editFg = e.target.value; refreshColModal(); });
+    // column settings modal — listen to both input (live) and change (commit) because
+    // some native color pickers only fire change, which would otherwise lose the pick.
+    ["input", "change"].forEach((ev) => {
+      document.getElementById("colBg").addEventListener(ev, (e) => { editBg = e.target.value; refreshColModal(); });
+      document.getElementById("colFg").addEventListener(ev, (e) => { editFg = e.target.value; refreshColModal(); });
+    });
     document.getElementById("colBgClear").addEventListener("click", () => { editBg = null; refreshColModal(); });
     document.getElementById("colFgClear").addEventListener("click", () => { editFg = null; refreshColModal(); });
     document.getElementById("colSave").addEventListener("click", saveColModal);
     document.getElementById("colCancel").addEventListener("click", closeColModal);
+    document.getElementById("colDelete").addEventListener("click", () => {
+      if (editColIndex == null) return;
+      const ci = editColIndex;
+      closeColModal();
+      deleteColumn(ci);          // has its own confirm + moves cards to a neighbor
+    });
     document.getElementById("colModal").addEventListener("click", (e) => {
       if (e.target.id === "colModal") closeColModal();
     });
