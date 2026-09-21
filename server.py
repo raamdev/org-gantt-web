@@ -107,8 +107,10 @@ def apply_card_patch(text, fields):
 
 
 HEX_RE = re.compile(r"^#[0-9A-Fa-f]{3,8}$")
-CARD_BG_RE = re.compile(r"^:CARD_BG:\s*(\S+)", re.IGNORECASE)
-CARD_FG_RE = re.compile(r"^:CARD_FG:\s*(\S+)", re.IGNORECASE)
+# Per-column styling in each kanban.org heading's property drawer. bg/fg color the cards;
+# border colors the column box. Keep these in sync with the frontend + COLOR_PROPS below.
+COLOR_PROPS = [("bg", "CARD_BG"), ("fg", "CARD_FG"), ("border", "BORDER")]
+COLOR_RE = {key: re.compile(r"^:%s:\s*(\S+)" % prop, re.IGNORECASE) for key, prop in COLOR_PROPS}
 
 
 def _hex_or_none(v):
@@ -117,26 +119,24 @@ def _hex_or_none(v):
 
 
 def clean_colors(names, colors):
-    """Keep only valid per-column card colors (#hex) for columns that exist."""
+    """Keep only valid per-column colors (#hex) for columns that exist."""
     out = {}
     for name in names:
         c = (colors or {}).get(name) or {}
         entry = {}
-        bg = _hex_or_none(c.get("bg"))
-        fg = _hex_or_none(c.get("fg"))
-        if bg:
-            entry["bg"] = bg
-        if fg:
-            entry["fg"] = fg
+        for key, _prop in COLOR_PROPS:
+            v = _hex_or_none(c.get(key))
+            if v:
+                entry[key] = v
         if entry:
             out[name] = entry
     return out
 
 
 def parse_board(text):
-    """Return ([names], {name: {bg?, fg?}}). Columns are the top-level headings of
-    kanban.org; a column's optional card colors live in that heading's property drawer
-    (:CARD_BG: / :CARD_FG:), so board styling round-trips with Emacs too."""
+    """Return ([names], {name: {bg?, fg?, border?}}). Columns are the top-level headings
+    of kanban.org; a column's optional colors live in that heading's property drawer
+    (:CARD_BG: / :CARD_FG: / :BORDER:), so board styling round-trips with Emacs too."""
     names, colors = [], {}
     cur = None
     for ln in (text or "").split("\n"):
@@ -148,15 +148,13 @@ def parse_board(text):
         if cur is None:
             continue
         stripped = ln.strip()
-        mb, mf = CARD_BG_RE.match(stripped), CARD_FG_RE.match(stripped)
-        if mb:
-            v = _hex_or_none(mb.group(1))
-            if v:
-                colors.setdefault(cur, {})["bg"] = v
-        elif mf:
-            v = _hex_or_none(mf.group(1))
-            if v:
-                colors.setdefault(cur, {})["fg"] = v
+        for key, _prop in COLOR_PROPS:
+            mm = COLOR_RE[key].match(stripped)
+            if mm:
+                v = _hex_or_none(mm.group(1))
+                if v:
+                    colors.setdefault(cur, {})[key] = v
+                break
     return names, colors
 
 
@@ -166,13 +164,12 @@ def board_text(columns, colors=None):
     for name in columns:
         lines.append("* " + name)
         c = colors.get(name) or {}
-        bg, fg = _hex_or_none(c.get("bg")), _hex_or_none(c.get("fg"))
-        if bg or fg:
+        props = [(prop, _hex_or_none(c.get(key))) for key, prop in COLOR_PROPS]
+        props = [(prop, v) for prop, v in props if v]
+        if props:
             lines.append(":PROPERTIES:")
-            if bg:
-                lines.append(":CARD_BG: " + bg)
-            if fg:
-                lines.append(":CARD_FG: " + fg)
+            for prop, v in props:
+                lines.append(":%s: %s" % (prop, v))
             lines.append(":END:")
     return "\n".join(lines) + "\n"
 

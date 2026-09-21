@@ -315,6 +315,7 @@
   .colorrow button { padding: 4px 10px; font-size: 12px; }
   .modal .kcard.preview { cursor: default; box-shadow: none; }
   .modal .kcard.preview:hover { border-color: var(--grid); }
+  .modal .preview-col { flex: none; width: auto; max-height: none; padding: 8px; }
 
   /* ---------- chart ---------- */
   .chart-wrap {
@@ -708,10 +709,20 @@
       </div>
     </div>
     <div class="field">
+      <label for="colBorder">Column border</label>
+      <div class="colorrow">
+        <input type="color" id="colBorder" aria-label="Column border color" />
+        <span class="swatchval" id="colBorderVal"></span>
+        <button class="quiet" id="colBorderClear" type="button">Use default</button>
+      </div>
+    </div>
+    <div class="field">
       <label>Preview</label>
-      <div class="kcard preview" id="colPreview" draggable="false">
-        <div class="kc-title">Sample card</div>
-        <div class="kc-note">A note about this project</div>
+      <div class="kcol preview-col" id="colPreviewCol">
+        <div class="kcard preview" id="colPreview" draggable="false">
+          <div class="kc-title">Sample card</div>
+          <div class="kc-note">A note about this project</div>
+        </div>
       </div>
     </div>
     <div class="actions">
@@ -1350,6 +1361,8 @@
     const col = document.createElement("div");
     col.className = "kcol";
     col.dataset.col = name;
+    const cstyle = board.colors[name] || {};
+    if (cstyle.border) col.style.borderColor = cstyle.border;   // per-column border color
 
     const head = document.createElement("div");
     head.className = "kcol-head";
@@ -1629,8 +1642,8 @@
     renderBoard();
   }
 
-  // -- column settings modal (per-column card colors) --
-  let editColIndex = null, editBg = null, editFg = null;
+  // -- column settings modal (per-column card + border colors) --
+  let editColIndex = null, editBg = null, editFg = null, editBorder = null;
   function themeToken(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
   function toHex6(h) {                       // <input type=color> needs #rrggbb
     h = (h || "").trim();
@@ -1640,14 +1653,18 @@
   function refreshColModal() {
     const bgDef = toHex6(themeToken("--panel")) || "#ffffff";
     const fgDef = toHex6(themeToken("--ink")) || "#000000";
+    const bdDef = toHex6(themeToken("--grid")) || "#cccccc";
     document.getElementById("colBg").value = toHex6(editBg) || bgDef;
     document.getElementById("colFg").value = toHex6(editFg) || fgDef;
+    document.getElementById("colBorder").value = toHex6(editBorder) || bdDef;
     document.getElementById("colBgVal").textContent = editBg || "default (theme)";
     document.getElementById("colFgVal").textContent = editFg || "default (theme)";
+    document.getElementById("colBorderVal").textContent = editBorder || "default (theme)";
     const pv = document.getElementById("colPreview");
     pv.style.setProperty("--kc-bg", editBg || bgDef);
     pv.style.setProperty("--kc-fg", editFg || fgDef);
     pv.classList.toggle("kc-colored", !!editFg);
+    document.getElementById("colPreviewCol").style.borderColor = editBorder || bdDef;
   }
   function openColumnSettings(ci) {
     editColIndex = ci;
@@ -1655,6 +1672,7 @@
     const cc = board.colors[name] || {};
     editBg = cc.bg || null;
     editFg = cc.fg || null;
+    editBorder = cc.border || null;
     document.getElementById("colModalTitle").textContent = "Column settings — " + name;
     document.getElementById("colDelete").hidden = board.columns.length <= 1;   // keep at least one
     refreshColModal();
@@ -1670,6 +1688,7 @@
     const entry = {};
     if (editBg) entry.bg = editBg;
     if (editFg) entry.fg = editFg;
+    if (editBorder) entry.border = editBorder;
     if (Object.keys(entry).length) board.colors[name] = entry; else delete board.colors[name];
     saveColumns();
     renderBoard();
@@ -1703,9 +1722,11 @@
     ["input", "change"].forEach((ev) => {
       document.getElementById("colBg").addEventListener(ev, (e) => { editBg = e.target.value; refreshColModal(); });
       document.getElementById("colFg").addEventListener(ev, (e) => { editFg = e.target.value; refreshColModal(); });
+      document.getElementById("colBorder").addEventListener(ev, (e) => { editBorder = e.target.value; refreshColModal(); });
     });
     document.getElementById("colBgClear").addEventListener("click", () => { editBg = null; refreshColModal(); });
     document.getElementById("colFgClear").addEventListener("click", () => { editFg = null; refreshColModal(); });
+    document.getElementById("colBorderClear").addEventListener("click", () => { editBorder = null; refreshColModal(); });
     document.getElementById("colSave").addEventListener("click", saveColModal);
     document.getElementById("colCancel").addEventListener("click", closeColModal);
     document.getElementById("colDelete").addEventListener("click", () => {

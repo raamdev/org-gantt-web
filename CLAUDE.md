@@ -61,12 +61,13 @@ demo → nothing. `MODE`, `currentProjectId`, and `projects` hold the mode state
   last-opened, so dragging a card never reshuffles the switcher's recency order.
 - `DELETE /api/projects/{id}` → removes the file. Project `id` is the `.org` basename;
   `SAFE_ID` + a root-containment check block path traversal (matters once hosted).
-- `GET /api/board` → `{columns: [...], colors: {name: {bg?, fg?}}}` — the ordered kanban
-  columns (top-level headings of `kanban.org`, lazily created with `DEFAULT_COLUMNS` on
-  first read) plus per-column card colors from each heading's property drawer.
+- `GET /api/board` → `{columns: [...], colors: {name: {bg?, fg?, border?}}}` — the ordered
+  kanban columns (top-level headings of `kanban.org`, lazily created with `DEFAULT_COLUMNS`
+  on first read) plus per-column colors from each heading's property drawer.
 - `PUT /api/board {columns, colors}` → rewrites `kanban.org` (one `* heading` per column,
-  with a `:CARD_BG:`/`:CARD_FG:` property drawer where set). Colors are validated to
-  `#hex` and dropped for unknown columns (`clean_colors` / `_hex_or_none`).
+  with a `:CARD_BG:`/`:CARD_FG:`/`:BORDER:` property drawer where set). Colors are validated
+  to `#hex` and dropped for unknown columns (`clean_colors` / `_hex_or_none`; the property
+  set is driven by `COLOR_PROPS`).
 
 Run it: `python3 server.py --dir ~/Dropbox/gantt` (defaults to `./projects`, port 8730).
 Mutating requests log a timestamped line to stdout (`created`/`updated`/`deleted`/`carded
@@ -123,7 +124,8 @@ Rules:
   round-trip these verbatim, so editing a project in the gantt view never drops them.
 - **The board file** `kanban.org` (a real, non-hidden `.org` in the project dir) holds
   the ordered column list — one top-level heading per column — plus each column's optional
-  **card colors** in that heading's property drawer (`:CARD_BG:` / `:CARD_FG:`, `#hex`).
+  **colors** in that heading's property drawer (`:CARD_BG:` / `:CARD_FG:` for cards,
+  `:BORDER:` for the column box; all `#hex`).
   It is *not* a project (excluded from the listing). Column membership/order/notes live on
   the individual projects (above); `kanban.org` is the column skeleton + styling, so empty
   columns, column order, and per-column colors survive. Reorder its headings in Emacs and
@@ -208,14 +210,17 @@ Rules:
   contentEditable, Enter/blur commit via `applyRename`, Esc cancels; the header's
   `draggable` is toggled off during edit so a text-selection drag can't reorder the
   column). Column reorder is still drag-the-header.
-- **Per-column card colors + delete**: the gear opens the column-settings modal
-  (`#colModal`) with two `<input type="color">` pickers (card background, card text) +
-  live preview + "Use default", plus a **Delete column** button (calls `deleteColumn`;
-  hidden when only one column remains). Colors live in `board.colors = {name: {bg?, fg?}}`,
-  applied per card as inline `--kc-bg` / `--kc-fg` custom props (the `.kcard` rules fall
-  back to theme tokens), and persisted via `saveColumns()` → `PUT /api/board` into the
-  column's `kanban.org` property drawer. A custom `fg` adds `.kc-colored` (subdues the
-  note); the open card's blue accent survives via `.kcard.current`'s inset shadow.
+- **Per-column colors + delete**: the gear opens the column-settings modal (`#colModal`)
+  with three `<input type="color">` pickers — card background, card text, and column
+  border — each with "Use default", a live preview (a mini `.kcol` box showing the border
+  around a sample `.kcard`), plus a **Delete column** button (calls `deleteColumn`; hidden
+  when only one column remains). Colors live in `board.colors = {name: {bg?, fg?, border?}}`.
+  Card colors apply as inline `--kc-bg` / `--kc-fg` custom props on each `.kcard` (rules
+  fall back to theme tokens); the border applies as an inline `borderColor` on the `.kcol`.
+  Each picker listens to both `input` and `change` (native panels may fire only `change`).
+  Persisted via `saveColumns()` → `PUT /api/board` into the column's `kanban.org` property
+  drawer. A custom `fg` adds `.kc-colored` (subdues the note); the open card's blue accent
+  survives via `.kcard.current`'s inset shadow.
 
 ## Roadmap (discussed, not built)
 
