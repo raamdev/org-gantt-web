@@ -471,9 +471,11 @@
   }
   .cal-dow > div:last-child { border-right: none; }
 
-  .cal-week { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--grid); }
+  .cal-week { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--grid); overflow: hidden; }
   .cal-week:last-child { border-bottom: none; }
-  .cal-daycell { border-right: 1px solid var(--grid); padding: 3px 7px; overflow: hidden; }
+  /* Each day is a real square: aspect-ratio ties its height to its (1fr) width, so the
+     whole calendar rescales squarely as the page widens. */
+  .cal-daycell { border-right: 1px solid var(--grid); padding: 3px 7px; overflow: hidden; aspect-ratio: 1 / 1; }
   .cal-daycell:last-child { border-right: none; }
   .cal-daycell.other { background: var(--day-stripe); }
   .cal-daynum { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
@@ -1863,7 +1865,7 @@
     // Phases overlapping the visible grid, tagged with a color per project.
     const phases = calendarData().filter((p) => p.start && p.end && p.start <= gridEnd && p.end >= gridStart);
 
-    const DAY_H = 22, BAR_H = 18, BAR_GAP = 3, PAD_BOTTOM = 5, MIN_WEEK = 78;
+    const DAY_H = 22, BAR_H = 18, BAR_GAP = 3;   // day-number band + bar geometry (px)
     grid.innerHTML = "";
     for (let w = 0; w < weeks; w++) {
       const wkStart = addDays(gridStart, w * 7);
@@ -1888,8 +1890,6 @@
         laneEnd[lane] = sg.col + sg.span - 1;
         sg.lane = lane;
       }
-      const weekH = Math.max(MIN_WEEK, DAY_H + laneEnd.length * (BAR_H + BAR_GAP) + PAD_BOTTOM);
-
       const week = document.createElement("div");
       week.className = "cal-week";
       for (let i = 0; i < 7; i++) {
@@ -1897,7 +1897,6 @@
         const inMonth = d(dayIso).getUTCMonth() === calM;
         const cell = document.createElement("div");
         cell.className = "cal-daycell" + (inMonth ? "" : " other") + (dayIso === today ? " today" : "");
-        cell.style.minHeight = weekH + "px";
         const num = document.createElement("span");
         num.className = "cal-daynum";
         num.textContent = d(dayIso).getUTCDate();

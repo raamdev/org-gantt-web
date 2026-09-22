@@ -211,7 +211,9 @@ Rules:
   `localStorage["org-gantt-kanban-collapsed"]`.
 - **Calendar view** (`#calWrap`, full-width panel under the gantt, server/demo only). A
   month grid (Monday-start, `.cal-week` rows of 7 `.cal-daycell`s) showing **phases from
-  all projects** as multi-day bars. Data: `GET /api/phases` (`loadCalendar` → `allPhases`)
+  all projects** as multi-day bars. Day cells are real squares via `aspect-ratio: 1/1`
+  (height tracks the `1fr` width, so the grid rescales squarely with the page — no JS
+  sizing); each `.cal-week` is `overflow:hidden` to clip a rare lane overflow. Data: `GET /api/phases` (`loadCalendar` → `allPhases`)
   for every project, but the **open** project's phases are taken live from `state.items`
   (groups) via `calendarData()`, so gantt edits move the bars immediately (`renderCalendar`
   is called from `render()`). Per week, phase segments are clipped to the week, greedily
