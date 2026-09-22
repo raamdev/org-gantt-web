@@ -68,6 +68,10 @@ demo → nothing. `MODE`, `currentProjectId`, and `projects` hold the mode state
   with a `:CARD_BG:`/`:CARD_FG:`/`:BORDER:` property drawer where set). Colors are validated
   to `#hex` and dropped for unknown columns (`clean_colors` / `_hex_or_none`; the property
   set is driven by `COLOR_PROPS`).
+- `GET /api/phases` → `[{id, project, name, start, end}]` — every project's phases (each
+  top-level heading with dated children; span = earliest child start → latest child end),
+  for the calendar view. `parse_phases` mirrors the frontend's phase logic; reads files
+  directly and does **not** bump last-opened.
 
 Run it: `python3 server.py --dir ~/Dropbox/gantt` (defaults to `./projects`, port 8730).
 Mutating requests log a timestamped line to stdout (`created`/`updated`/`deleted`/`carded
@@ -205,6 +209,18 @@ Rules:
   re-`applyCardEdit` the affected cards (and carry/drop `board.colors[name]`). The card
   editor modal edits title (`#+TITLE`) + note. Collapse state is in
   `localStorage["org-gantt-kanban-collapsed"]`.
+- **Calendar view** (`#calWrap`, full-width panel under the gantt, server/demo only). A
+  month grid (Monday-start, `.cal-week` rows of 7 `.cal-daycell`s) showing **phases from
+  all projects** as multi-day bars. Data: `GET /api/phases` (`loadCalendar` → `allPhases`)
+  for every project, but the **open** project's phases are taken live from `state.items`
+  (groups) via `calendarData()`, so gantt edits move the bars immediately (`renderCalendar`
+  is called from `render()`). Per week, phase segments are clipped to the week, greedily
+  packed into lanes (so overlaps stack), and drawn as absolutely-positioned `.cal-bar`s
+  (`left`/`width` as `col/7`%; `.cont-left`/`.cont-right` flatten edges where a phase
+  continues across weeks). Bars are colored per project (`colorFor` hashes the id into
+  `CAL_PALETTE`), labeled with the phase name (project+dates in the title), and clicking
+  one `openProject`s it. `calY`/`calM` hold the shown month (‹ › / Today via
+  `setupCalendarUI`); a legend lists the projects with phases that month.
 - **Column header** (`.kcol-head`) is deliberately minimal: just the column name + a gear
   (⚙). No card count. The name is **inline-editable** — click it (`startInlineRename` →
   contentEditable, Enter/blur commit via `applyRename`, Esc cancels; the header's

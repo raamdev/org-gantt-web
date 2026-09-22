@@ -37,6 +37,10 @@ org-mode, so you can drag bars around in the browser and edit the same file in E
 - **Zoom & scroll** — zoom in for detail or out for the big picture; the timeline
   spans one month before your earliest task to one month after your latest, and
   scrolls/swipes horizontally with task names pinned.
+- **Month calendar** — a full-width calendar under the chart shows every project's
+  **phases** as multi-day bars for the current month (each phase spans its earliest task
+  start to its latest task end), colored per project. Click a bar to open that project.
+  *(Server/demo mode.)*
 - **Editable org buffer** — the plain-text source sits under the chart; edit either
   one and they stay in sync.
 - **Light & dark theme** — follows your OS by default; a toggle in the upper right

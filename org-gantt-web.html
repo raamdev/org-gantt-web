@@ -450,6 +450,48 @@
 
   .empty-hint { padding: 28px; color: var(--muted); font-size: 14px; }
 
+  /* ---------- calendar (month view of phases across all projects) ---------- */
+  .cal-wrap {
+    background: var(--panel); border: 1.5px solid var(--grid); border-radius: 10px;
+    overflow: hidden; margin-bottom: 20px;
+  }
+  .cal-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1.5px solid var(--grid); flex-wrap: wrap; }
+  .cal-head .cal-nav { padding: 3px 12px; font-size: 15px; line-height: 1; font-weight: 700; }
+  .cal-head #calToday { padding: 4px 12px; font-size: 12px; }
+  .cal-title { font-weight: 700; font-size: 15px; min-width: 150px; text-align: center; font-family: var(--sans); }
+  .cal-caption { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-left: auto; justify-content: flex-end; }
+  .cal-legend .lg { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+  .cal-legend .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  .cal-dow { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1.5px solid var(--grid); }
+  .cal-dow > div {
+    padding: 5px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted); border-right: 1px solid var(--grid);
+  }
+  .cal-dow > div:last-child { border-right: none; }
+
+  .cal-week { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--grid); }
+  .cal-week:last-child { border-bottom: none; }
+  .cal-daycell { border-right: 1px solid var(--grid); padding: 3px 7px; overflow: hidden; }
+  .cal-daycell:last-child { border-right: none; }
+  .cal-daycell.other { background: var(--day-stripe); }
+  .cal-daynum { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+  .cal-daycell.other .cal-daynum { color: var(--muted); font-weight: 400; }
+  .cal-daycell.today .cal-daynum {
+    background: var(--accent); color: #fff; border-radius: 999px; padding: 1px 6px;
+    display: inline-block; min-width: 20px; text-align: center;
+  }
+  .cal-bar {
+    position: absolute; height: 18px; line-height: 18px; border-radius: 4px; color: #fff;
+    font-size: 11px; font-weight: 600; padding: 0 7px; overflow: hidden; white-space: nowrap;
+    text-overflow: ellipsis; cursor: pointer; box-sizing: border-box; z-index: 2;
+  }
+  .cal-bar:hover { filter: brightness(1.08); }
+  .cal-bar.cont-left { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+  .cal-bar.cont-right { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+  .cal-empty { padding: 22px; color: var(--muted); font-size: 13px; }
+
   /* ---------- editor ---------- */
   .editor {
     background: var(--panel); border: 1.5px solid var(--grid); border-radius: 10px;
@@ -645,6 +687,21 @@
   </div>
 </div>
 
+<div class="cal-wrap" id="calWrap" style="display:none">
+  <div class="cal-head">
+    <button class="cal-nav" id="calPrev" type="button" aria-label="Previous month">‹</button>
+    <div class="cal-title" id="calTitle"></div>
+    <button class="cal-nav" id="calNext" type="button" aria-label="Next month">›</button>
+    <button class="quiet" id="calToday" type="button">Today</button>
+    <span class="cal-caption">Phases across all projects</span>
+    <span class="cal-legend" id="calLegend"></span>
+  </div>
+  <div class="cal-dow">
+    <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+</div>
+
 <div class="buffer">
   <div class="tabbar" id="bufBar" title="Show / hide the .org source" role="button" tabindex="0" aria-expanded="false">
     <span class="filename"><span class="bufcaret" id="bufCaret" aria-hidden="true">▾</span><span id="bufName">bathroom-renovation.org</span></span>
@@ -758,6 +815,8 @@
   let currentProjectId = null;      // server/demo: the .org filename being edited
   let projects = [];                // server/demo: recent project list (also the kanban cards)
   let board = { columns: [], colors: {} };   // ordered kanban columns + per-column card colors
+  let allPhases = [];               // calendar: phases from all projects (server /api/phases)
+  let calY = null, calM = null;     // calendar: month being shown (year, 0-based month)
   const collapsed = new Set();
   let uid = 1;
   function nextId() { return "i" + (uid++); }
@@ -1166,6 +1225,7 @@
             }).then((r) => r.json()),
     del:    (id) => fetch("/api/projects/" + encodeURIComponent(id), { method: "DELETE" }).then((r) => r.json()),
     board:  () => fetch("/api/board").then((r) => (r.ok ? r.json() : Promise.reject(new Error("board failed")))),
+    phases: () => fetch("/api/phases").then((r) => (r.ok ? r.json() : Promise.reject(new Error("phases failed")))),
     saveBoard: (columns, colors) => fetch("/api/board", {
               method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ columns, colors }),
             }).then((r) => (r.ok ? r.json() : Promise.reject(new Error("board save failed")))),
@@ -1207,6 +1267,7 @@
     try { projects = await api.list(); } catch (e) { projects = []; }
     renderProjectMenu();
     renderBoard();
+    loadCalendar();      // refresh phases across projects (switch/create/delete)
   }
   function renderProjectMenu() {
     const list = document.getElementById("projList");
@@ -1291,6 +1352,7 @@
     });
     document.getElementById("demoFlag").hidden = !cfg.demo;
     setupBoardUI();
+    setupCalendarUI();
     document.getElementById("projMenuBtn").addEventListener("click", (e) => { e.stopPropagation(); toggleProjectMenu(); });
     document.getElementById("projNew").addEventListener("click", newProject);
     document.addEventListener("click", (e) => {
@@ -1745,6 +1807,155 @@
     });
   }
 
+  // ---------- calendar (month view of phases across all projects) ----------
+  // Server/demo only (it needs the multi-file /api/phases). The open project's phases
+  // are taken live from `state` so gantt edits reflect immediately; other projects come
+  // from the last /api/phases fetch.
+  const CAL_PALETTE = ["#33688A", "#5E8C6A", "#B5562E", "#6E5AA6", "#3E8A8A", "#A6486A", "#8A6D3B", "#4C7BB0"];
+  const MON_FULL = ["January", "February", "March", "April", "May", "June",
+                    "July", "August", "September", "October", "November", "December"];
+  function calendarActive() { return MODE === "server" || MODE === "demo"; }
+  function colorFor(id) {
+    let h = 0; const s = String(id || "");
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return CAL_PALETTE[h % CAL_PALETTE.length];
+  }
+
+  async function loadCalendar() {
+    if (!calendarActive()) return;
+    try { allPhases = await api.phases(); } catch (e) { allPhases = []; }
+    renderCalendar();
+  }
+
+  // Phases for the calendar: the open project's straight from `state` (live), everyone
+  // else's from the server fetch.
+  function calendarData() {
+    const out = allPhases.filter((p) => p.id !== currentProjectId).map((p) => ({
+      id: p.id, project: p.project, name: p.name, start: p.start, end: p.end,
+    }));
+    if (state && Array.isArray(state.items)) {
+      for (const it of state.items) {
+        if (it.children && it.children.length && it.start && it.end) {
+          out.push({ id: currentProjectId, project: state.title, name: it.name, start: it.start, end: it.end });
+        }
+      }
+    }
+    return out;
+  }
+
+  function renderCalendar() {
+    const wrap = document.getElementById("calWrap");
+    if (!wrap || !calendarActive()) return;
+    const grid = document.getElementById("calGrid");
+    if (calY == null) { const now = new Date(); calY = now.getFullYear(); calM = now.getMonth(); }
+    document.getElementById("calTitle").textContent = MON_FULL[calM] + " " + calY;
+
+    // Grid range: Monday of the week containing the 1st → Sunday of the week with the last day.
+    const firstIso = calY + "-" + String(calM + 1).padStart(2, "0") + "-01";
+    const back = (d(firstIso).getUTCDay() + 6) % 7;         // 0=Mon
+    const gridStart = addDays(firstIso, -back);
+    const lastDay = new Date(Date.UTC(calY, calM + 1, 0)).getUTCDate();
+    const lastIso = calY + "-" + String(calM + 1).padStart(2, "0") + "-" + String(lastDay).padStart(2, "0");
+    const weeks = Math.ceil((diffDays(gridStart, lastIso) + 1) / 7);
+    const gridEnd = addDays(gridStart, weeks * 7 - 1);
+    const today = todayIso();
+
+    // Phases overlapping the visible grid, tagged with a color per project.
+    const phases = calendarData().filter((p) => p.start && p.end && p.start <= gridEnd && p.end >= gridStart);
+
+    const DAY_H = 22, BAR_H = 18, BAR_GAP = 3, PAD_BOTTOM = 5, MIN_WEEK = 78;
+    grid.innerHTML = "";
+    for (let w = 0; w < weeks; w++) {
+      const wkStart = addDays(gridStart, w * 7);
+      const wkEnd = addDays(wkStart, 6);
+      // Segments of each phase that fall in this week.
+      const segs = [];
+      for (const p of phases) {
+        const s = p.start > wkStart ? p.start : wkStart;
+        const e = p.end < wkEnd ? p.end : wkEnd;
+        if (s > e) continue;
+        segs.push({
+          p, col: diffDays(wkStart, s), span: diffDays(s, e) + 1,
+          contLeft: p.start < wkStart, contRight: p.end > wkEnd,
+        });
+      }
+      // Greedy lane packing so overlapping phases stack.
+      segs.sort((a, b) => a.col - b.col || b.span - a.span);
+      const laneEnd = [];
+      for (const sg of segs) {
+        let lane = 0;
+        while (lane < laneEnd.length && laneEnd[lane] >= sg.col) lane++;
+        laneEnd[lane] = sg.col + sg.span - 1;
+        sg.lane = lane;
+      }
+      const weekH = Math.max(MIN_WEEK, DAY_H + laneEnd.length * (BAR_H + BAR_GAP) + PAD_BOTTOM);
+
+      const week = document.createElement("div");
+      week.className = "cal-week";
+      for (let i = 0; i < 7; i++) {
+        const dayIso = addDays(wkStart, i);
+        const inMonth = d(dayIso).getUTCMonth() === calM;
+        const cell = document.createElement("div");
+        cell.className = "cal-daycell" + (inMonth ? "" : " other") + (dayIso === today ? " today" : "");
+        cell.style.minHeight = weekH + "px";
+        const num = document.createElement("span");
+        num.className = "cal-daynum";
+        num.textContent = d(dayIso).getUTCDate();
+        cell.appendChild(num);
+        week.appendChild(cell);
+      }
+      for (const sg of segs) {
+        const bar = document.createElement("div");
+        bar.className = "cal-bar" + (sg.contLeft ? " cont-left" : "") + (sg.contRight ? " cont-right" : "");
+        bar.style.left = "calc(" + (sg.col / 7 * 100) + "% + 3px)";
+        bar.style.width = "calc(" + (sg.span / 7 * 100) + "% - 6px)";
+        bar.style.top = (DAY_H + sg.lane * (BAR_H + BAR_GAP)) + "px";
+        bar.style.background = colorFor(sg.p.id);
+        bar.textContent = sg.p.name;
+        bar.title = sg.p.project + " — " + sg.p.name + " · " + fmtShort(sg.p.start) + " – " + fmtShort(sg.p.end);
+        if (sg.p.id) bar.addEventListener("click", () => openProject(sg.p.id));
+        week.appendChild(bar);
+      }
+      grid.appendChild(week);
+    }
+
+    if (!phases.length) {
+      const hint = document.createElement("div");
+      hint.className = "cal-empty";
+      hint.textContent = "No project phases fall in " + MON_FULL[calM] + " " + calY + ".";
+      grid.appendChild(hint);
+    }
+
+    // Legend: one swatch per project with a phase visible this month.
+    const legend = document.getElementById("calLegend");
+    legend.innerHTML = "";
+    const seen = new Map();
+    for (const p of phases) if (!seen.has(p.id)) seen.set(p.id, p.project);
+    for (const [id, proj] of seen) {
+      const lg = document.createElement("span");
+      lg.className = "lg";
+      lg.innerHTML = '<span class="sw"></span><span class="nm"></span>';
+      lg.querySelector(".sw").style.background = colorFor(id);
+      lg.querySelector(".nm").textContent = proj;
+      legend.appendChild(lg);
+    }
+  }
+
+  function calShift(delta) {
+    if (calY == null) { const now = new Date(); calY = now.getFullYear(); calM = now.getMonth(); }
+    let m = calM + delta, y = calY;
+    y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+    calY = y; calM = m; renderCalendar();
+  }
+  function calToday() { const now = new Date(); calY = now.getFullYear(); calM = now.getMonth(); renderCalendar(); }
+
+  function setupCalendarUI() {
+    document.getElementById("calWrap").style.display = "";
+    document.getElementById("calPrev").addEventListener("click", () => calShift(-1));
+    document.getElementById("calNext").addEventListener("click", () => calShift(1));
+    document.getElementById("calToday").addEventListener("click", calToday);
+  }
+
   // ---------- range ----------
   function chartRange() {
     const t = todayIso();
@@ -1789,6 +2000,7 @@
     renderHeader();
     renderChart();
     renderBuffer();
+    renderCalendar();      // the open project's phase spans update live as you edit
   }
 
   // Highlight the row under the mouse in BOTH panes (label cell + bar row).
@@ -2475,6 +2687,7 @@
       MODE = cfg.demo ? "demo" : "server";
       setupServerUI(cfg);
       await loadBoard();
+      await loadCalendar();
       await loadProjectList();
       let openId = null;
       try { openId = localStorage.getItem("org-gantt-last"); } catch (_) {}

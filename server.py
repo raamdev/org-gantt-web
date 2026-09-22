@@ -174,6 +174,56 @@ def board_text(columns, colors=None):
     return "\n".join(lines) + "\n"
 
 
+# --- phases (for the calendar view): a phase is a top-level heading with children;
+#     its span is the earliest child start → latest child end. Mirrors the frontend's
+#     parseOrg/syncGroups, kept minimal (only what the month calendar needs). ---
+_PH_HEADING = re.compile(r"^(\*+)\s+(?:(?:TODO|DONE|NEXT|WAIT|WAITING|CANCELLED)\s+)?(.*)$")
+_PH_SCHED = re.compile(r"SCHEDULED:\s*<(\d{4}-\d{2}-\d{2})")
+_PH_DEAD = re.compile(r"DEADLINE:\s*<(\d{4}-\d{2}-\d{2})")
+
+
+def _phase_title(t):
+    m = re.match(r"^(.*?)\s+:[A-Za-z0-9_@:]+:\s*$", t)   # strip a trailing :tag:
+    if m:
+        t = m.group(1)
+    t = re.sub(r"\s*\[\d*(?:%|/\d*)\]\s*$", "", t)        # strip a trailing [n/m] cookie
+    return t.strip()
+
+
+def parse_phases(text):
+    """[{name, start, end}] for every top-level heading that has dated children."""
+    tops, cur_top, cur_child = [], None, None
+    for raw in (text or "").split("\n"):
+        line = raw.strip()
+        if line.startswith("*"):
+            m = _PH_HEADING.match(line)
+            if m:
+                if len(m.group(1)) == 1:
+                    cur_top = {"name": _phase_title(m.group(2) or ""), "kids": []}
+                    tops.append(cur_top)
+                    cur_child = None
+                else:
+                    if cur_top is None:
+                        cur_top = {"name": _phase_title(m.group(2) or ""), "kids": []}
+                        tops.append(cur_top)
+                    cur_child = {"start": None, "end": None}
+                    cur_top["kids"].append(cur_child)
+                continue
+        if cur_child is not None:
+            ms, md = _PH_SCHED.search(line), _PH_DEAD.search(line)
+            if ms:
+                cur_child["start"] = ms.group(1)
+            if md:
+                cur_child["end"] = md.group(1)
+    out = []
+    for top in tops:
+        starts = [k["start"] or k["end"] for k in top["kids"] if (k["start"] or k["end"])]
+        ends = [k["end"] or k["start"] for k in top["kids"] if (k["end"] or k["start"])]
+        if top["kids"] and starts and ends:
+            out.append({"name": top["name"] or "(untitled)", "start": min(starts), "end": max(ends)})
+    return out
+
+
 def log(msg):
     """Timestamped line to stdout (flushed so it shows up live under the server)."""
     print("[%s] %s" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), msg), flush=True)
@@ -312,6 +362,26 @@ class FileStore:
             os.replace(tmp, p)
         return {"columns": names, "colors": clean}
 
+    def phases(self):
+        """Every project's phases (top-level headings with dated children), for the
+        calendar view. Reads files directly and does NOT bump 'recently opened'."""
+        out = []
+        for name in sorted(os.listdir(self.root)):
+            if name.startswith(".") or not name.endswith(".org") or name == BOARD_NAME:
+                continue
+            p = os.path.join(self.root, name)
+            if not os.path.isfile(p):
+                continue
+            try:
+                with open(p, encoding="utf-8") as f:
+                    text = f.read()
+            except OSError:
+                continue
+            proj = title_of(text, name[:-4])
+            for ph in parse_phases(text):
+                out.append({"id": name, "project": proj, **ph})
+        return out
+
     def patch(self, pid, fields):
         """In-place edit of a project's card keywords. Does NOT bump 'recently
         opened' — dragging a card around shouldn't reshuffle the project switcher."""
@@ -419,6 +489,14 @@ class DemoStore:
         self.columns = [str(c).strip() for c in columns if str(c).strip()]
         self.colors = clean_colors(self.columns, colors)
         return {"columns": list(self.columns), "colors": dict(self.colors)}
+
+    def phases(self):
+        out = []
+        for pid, text in self.samples.items():
+            proj = title_of(text, pid[:-4])
+            for ph in parse_phases(text):
+                out.append({"id": pid, "project": proj, **ph})
+        return out
 
     def patch(self, pid, fields):
         if pid not in self.samples:
@@ -673,6 +751,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_json(self.store.list())
         if path == "/api/board":
             return self._send_json(self.store.board())
+        if path == "/api/phases":
+            return self._send_json(self.store.phases())
         m = re.match(r"^/api/projects/([^/]+)$", path)
         if m:
             pid = unquote(m.group(1))
