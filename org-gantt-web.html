@@ -225,6 +225,19 @@
   }
   .kcol.dragover-col { border-color: var(--bar); }
   .kcol.drop-before { box-shadow: -3px 0 0 var(--accent); }
+  /* collapsed column: a narrow, full-height strip; click anywhere to expand */
+  .kcol.collapsed {
+    flex: 0 0 auto; width: 42px; min-width: 42px; min-height: 130px; max-height: none;
+    align-self: stretch; cursor: pointer; overflow: hidden;
+  }
+  .kcol.collapsed:hover { border-color: var(--bar); }
+  .kcol-collapsed { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0; height: 100%; }
+  .kcol-collapsed .kcol-cnt { font-family: var(--mono); font-size: 11px; color: var(--muted); flex: none; }
+  .kcol-collapsed .kcol-vname {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-weight: 700; font-size: 13px; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 0;
+  }
   .kcol-head {
     display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 12px;
     border-bottom: 1.5px solid var(--grid); cursor: grab; user-select: none;
@@ -245,6 +258,7 @@
     padding: 2px 5px; border-radius: 5px; font-size: 12px; line-height: 1; flex: none;
   }
   .kcol-head .kbtn.gear { font-size: 20px; }
+  .kcol-head .kbtn.collapse { font-size: 16px; }
   .kcol-head .kbtn:hover { background: var(--weekend); color: var(--ink); }
 
   .kcol-list {
@@ -1379,6 +1393,21 @@
     return (p.column && board.columns.includes(p.column)) ? p.column : board.columns[0];
   }
 
+  // Per-column collapse (view state, per browser — like the buffer/whole-board toggles).
+  let collapsedCols = new Set();
+  function loadCollapsedCols() {
+    try { const a = JSON.parse(localStorage.getItem("org-gantt-col-collapsed") || "[]"); if (Array.isArray(a)) collapsedCols = new Set(a); }
+    catch (_) { collapsedCols = new Set(); }
+  }
+  function saveCollapsedCols() {
+    try { localStorage.setItem("org-gantt-col-collapsed", JSON.stringify([...collapsedCols])); } catch (_) {}
+  }
+  function isColCollapsed(name) { return collapsedCols.has(name); }
+  function setColCollapsed(name, on) {
+    if (on) collapsedCols.add(name); else collapsedCols.delete(name);
+    saveCollapsedCols(); renderBoard();
+  }
+
   async function loadBoard() {
     if (!boardActive()) return;
     try { const r = await api.board(); board.columns = r.columns || []; board.colors = r.colors || {}; }
@@ -1430,15 +1459,27 @@
     const cstyle = board.colors[name] || {};
     if (cstyle.border) col.style.borderColor = cstyle.border;   // per-column border color
 
+    if (isColCollapsed(name)) {                                  // narrow strip: count + vertical name
+      col.classList.add("collapsed");
+      col.title = "Click to expand";
+      col.innerHTML = '<div class="kcol-collapsed"><span class="kcol-cnt"></span><span class="kcol-vname"></span></div>';
+      col.querySelector(".kcol-cnt").textContent = cards.length;
+      col.querySelector(".kcol-vname").textContent = name;
+      col.addEventListener("click", () => setColCollapsed(name, false));
+      return col;
+    }
+
     const head = document.createElement("div");
     head.className = "kcol-head";
     head.draggable = true;
     head.innerHTML =
       '<span class="kcol-name" title="Click to rename"></span>' +
+      '<button class="kbtn collapse" title="Collapse column" aria-label="Collapse column">«</button>' +
       '<button class="kbtn gear" title="Column settings" aria-label="Column settings">⚙</button>';
     const nameEl = head.querySelector(".kcol-name");
     nameEl.textContent = name;
     nameEl.addEventListener("click", (e) => { e.stopPropagation(); startInlineRename(nameEl, ci); });
+    head.querySelector(".collapse").addEventListener("click", (e) => { e.stopPropagation(); setColCollapsed(name, true); });
     head.querySelector(".gear").addEventListener("click", (e) => { e.stopPropagation(); openColumnSettings(ci); });
     head.querySelectorAll(".kbtn").forEach((b) => (b.draggable = false));
     // column drag-to-reorder
@@ -1656,6 +1697,7 @@
     if (board.columns.includes(name)) { alert("A column with that name already exists."); renderBoard(); return; }
     board.columns[ci] = name;
     if (board.colors[old]) { board.colors[name] = board.colors[old]; delete board.colors[old]; }  // colors follow the rename
+    if (collapsedCols.has(old)) { collapsedCols.delete(old); collapsedCols.add(name); saveCollapsedCols(); }
     // Cards that explicitly named the old column follow the rename. (Cards with no
     // column keyword only ever sit in the first column and need no rewrite.)
     projects.filter((p) => p.column === old).forEach((p) => applyCardEdit(p.id, { column: name }));
@@ -1673,6 +1715,7 @@
     projects.filter((p) => p.column === name).forEach((p) => { base += 10; applyCardEdit(p.id, { column: target, order: base }); });
     board.columns.splice(ci, 1);
     delete board.colors[name];
+    if (collapsedCols.delete(name)) saveCollapsedCols();
     saveColumns(); renderBoard();
   }
   function reorderColumns(from, to) {
@@ -1763,6 +1806,7 @@
 
   function setupBoardUI() {
     document.getElementById("kanban").style.display = "";
+    loadCollapsedCols();
     document.getElementById("kanbanAddCol").addEventListener("click", addColumn);
     const collapseBtn = document.getElementById("kanbanCollapse");
     const kanban = document.getElementById("kanban");

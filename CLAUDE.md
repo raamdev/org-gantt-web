@@ -229,11 +229,18 @@ Rules:
   `CAL_PALETTE`), labeled with the phase name (project+dates in the title), and clicking
   one `openProject`s it. `calY`/`calM` hold the shown month (‹ › / Today via
   `setupCalendarUI`); a legend lists the projects with phases that month.
-- **Column header** (`.kcol-head`) is deliberately minimal: just the column name + a gear
-  (⚙). No card count. The name is **inline-editable** — click it (`startInlineRename` →
-  contentEditable, Enter/blur commit via `applyRename`, Esc cancels; the header's
-  `draggable` is toggled off during edit so a text-selection drag can't reorder the
-  column). Column reorder is still drag-the-header.
+- **Column header** (`.kcol-head`) is deliberately minimal: the column name + a collapse
+  icon (`«`) + a gear (⚙). No card count. The name is **inline-editable** — click it
+  (`startInlineRename` → contentEditable, Enter/blur commit via `applyRename`, Esc cancels;
+  the header's `draggable` is toggled off during edit so a text-selection drag can't
+  reorder the column). Column reorder is still drag-the-header.
+- **Per-column collapse**: the `«` icon collapses a column to a narrow full-height strip
+  (`.kcol.collapsed`, `align-self:stretch`) showing the card count + the name rotated
+  vertically (`writing-mode: vertical-rl`); clicking the strip re-expands it. Which columns
+  are collapsed is view state in `collapsedCols` (a Set of names), persisted per-browser in
+  `localStorage["org-gantt-col-collapsed"]` (a JSON array) — like the buffer/whole-board
+  toggles, *not* in `kanban.org`. `renderColumn` early-returns the strip when
+  `isColCollapsed(name)`; the set follows renames and drops on delete.
 - **Per-column colors + delete**: the gear opens the column-settings modal (`#colModal`)
   with three `<input type="color">` pickers — card background, card text, and column
   border — each with "Use default", a live preview (a mini `.kcol` box showing the border
