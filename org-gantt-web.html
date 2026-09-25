@@ -388,6 +388,8 @@
     content: ""; position: absolute; left: 0; top: -4px; width: 6px; height: 6px;
     border-radius: 50%; background: var(--accent);
   }
+  /* target phase when dragging a task into it */
+  .row.drop-into, .label-cell.drop-into { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-bg); }
 
   .bar {
     position: absolute; top: 3px; height: 16px; border-radius: 4px;
@@ -2298,41 +2300,73 @@
       // reorder. The axis is locked in once, from the first few px of movement.
       let mode = resizing ? "resize" : null;      // "resize" | "reschedule" | "reorder"
       const rowEl = el.closest(".row");
-      const parent = findItem(it.id).parent;
-      const listArr = parent ? parent.children : state.items;   // reorder within siblings
-      let sibs = null, dropLine = null, targetIndex = listArr.indexOf(it);
+      // Vertical drag = reorder AND cross-level move: a task/milestone can be dropped
+      // into a phase (becomes its child) or back out to the top level. A phase can only
+      // move among the top level (two-level model). `rows` is the flattened visible list;
+      // `dropTarget` = the resolved {parentList, index} to splice into on drop.
+      let rows = null, dropLine = null, dropTarget = null;
 
       function beginReorder() {
         mode = "reorder";
         if (rowEl) rowEl.classList.add("reordering");
-        sibs = listArr
-          .map((s) => ({ item: s, el: chartEl.querySelector('.row[data-id="' + s.id + '"]') }))
-          .filter((s) => s.el);
+        const kidIds = group ? new Set(it.children.map((c) => c.id)) : null;
+        rows = visibleRows().map((r) => {
+          const rEl = chartEl.querySelector('.row[data-id="' + r.it.id + '"]');
+          return rEl ? { it: r.it, depth: r.depth, parent: r.parent || null, el: rEl } : null;
+        }).filter((r) => r && r.it.id !== it.id && !(kidIds && kidIds.has(r.it.id)));
         dropLine = document.createElement("div");
         dropLine.className = "dropline";
         chartEl.appendChild(dropLine);
       }
-      function placeDrop(clientY) {
-        let idx = 0;
-        for (const s of sibs) {
-          const r = s.el.getBoundingClientRect();
-          if (clientY > r.top + r.height / 2) idx++;
+      function clearInto() {
+        chartEl.querySelectorAll(".row.drop-into").forEach((e) => e.classList.remove("drop-into"));
+        labelCol.querySelectorAll(".label-cell.drop-into").forEach((e) => e.classList.remove("drop-into"));
+      }
+      function computeDrop(clientY) {
+        clearInto();
+        let idx = 0;                                  // insertion gap within `rows`
+        for (const r of rows) {
+          const rect = r.el.getBoundingClientRect();
+          if (clientY > rect.top + rect.height / 2) idx++;
         }
-        targetIndex = idx;
-        const at = idx < sibs.length
-          ? sibs[idx].el.offsetTop
-          : sibs[sibs.length - 1].el.offsetTop + sibs[sibs.length - 1].el.offsetHeight;
-        dropLine.style.top = at + "px";
+        const prev = rows[idx - 1] || null;
+        let parentList, index, intoPhase = null;
+        if (!group && prev && prev.parent) {                       // after a child → into its phase
+          parentList = prev.parent.children;
+          index = prev.parent.children.indexOf(prev.it) + 1;
+          intoPhase = prev.parent;
+        } else if (!group && prev && isGroup(prev.it)) {           // just under a phase header → into it
+          parentList = prev.it.children;
+          index = collapsed.has(prev.it.id) ? prev.it.children.length : 0;
+          intoPhase = prev.it;
+        } else {                                                   // top level
+          parentList = state.items;
+          if (!prev) index = 0;
+          else index = state.items.indexOf(prev.parent ? prev.parent : prev.it) + 1;
+        }
+        dropTarget = { parentList, index };
+        if (intoPhase) {
+          dropLine.style.display = "none";
+          const prow = chartEl.querySelector('.row[data-id="' + intoPhase.id + '"]');
+          const pcell = labelCol.querySelector('.label-cell[data-id="' + intoPhase.id + '"]');
+          if (prow) prow.classList.add("drop-into");
+          if (pcell) pcell.classList.add("drop-into");
+        } else {
+          dropLine.style.display = "";
+          const next = rows[idx] || null;
+          dropLine.style.top = (next ? next.el.offsetTop
+            : prev ? prev.el.offsetTop + prev.el.offsetHeight : 0) + "px";
+        }
       }
 
       function onMove(e) {
         const dx = e.clientX - startX, dy = e.clientY - startY;
         if (mode === null) {                          // decide axis once, past a jitter threshold
           if (Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
-          if (Math.abs(dy) > Math.abs(dx) && listArr.length > 1) beginReorder();
+          if (Math.abs(dy) > Math.abs(dx) && visibleRows().length > 1) beginReorder();
           else mode = "reschedule";
         }
-        if (mode === "reorder") { dragMoved = true; placeDrop(e.clientY); return; }
+        if (mode === "reorder") { dragMoved = true; computeDrop(e.clientY); return; }
 
         const dxDays = Math.round(dx / dayW);
         if (dxDays !== 0) dragMoved = true;
@@ -2357,14 +2391,21 @@
         window.removeEventListener("pointercancel", onUp);
         if (mode === "reorder") {
           if (dropLine) dropLine.remove();
+          clearInto();
           if (rowEl) rowEl.classList.remove("reordering");
-          const from = listArr.indexOf(it);
-          let to = targetIndex;
-          if (to > from) to -= 1;                     // account for the item leaving its slot
-          if (to !== from && to >= 0) {
-            listArr.splice(from, 1);
-            listArr.splice(to, 0, it);
-            render(); saveStorage();                  // rewrites the .org heading order
+          if (dropTarget) {
+            const cur = findItem(it.id);
+            const fromList = cur.parent ? cur.parent.children : state.items;
+            const fromIdx = fromList.indexOf(it);
+            let { parentList, index } = dropTarget;
+            if (parentList === fromList && fromIdx < index) index--;   // it leaves its slot first
+            const sameSpot = parentList === fromList && index === fromIdx;
+            if (!sameSpot && fromIdx !== -1) {
+              fromList.splice(fromIdx, 1);
+              index = Math.max(0, Math.min(index, parentList.length));
+              parentList.splice(index, 0, it);
+              render(); saveStorage();                // rewrites .org order + heading levels
+            }
           }
         } else if (dragMoved) {
           renderBuffer(); saveStorage(); if (selectedId === it.id) fillEditor(it);

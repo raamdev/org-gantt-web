@@ -170,13 +170,19 @@ Rules:
 - Drag (`attachDrag`, one handler, **axis-locked**): a drag on the bar commits to one
   axis from the first ~4px of movement. Horizontal → reschedule (day-quantized; a
   phase's summary bar shifts all children by the same delta; the right-edge `.handle`
-  resizes a leaf task's duration). Vertical → reorder: moves the item among its
-  siblings only (top-level within `state.items`, a phase's children within that phase),
-  showing a `.dropline` at the target gap, and rewrites the `.org` heading order on
-  drop. Move/up listeners are bound to `window` (not the bar) because a reschedule
-  re-renders the chart mid-drag and destroys the grabbed bar element — element-bound
-  listeners would sever the drag after the first pixel. Cross-level moves (child ↔
-  top-level) are not supported yet.
+  resizes a leaf task's duration). Vertical → reorder **and cross-level move**: over the
+  flattened visible rows (`computeDrop`), the drop target resolves to a `{parentList,
+  index}` — a task/milestone dropped just under a phase header or among its children
+  becomes that phase's **child** (the phase row + label get `.drop-into`), and one dropped
+  in a gap next to a top-level row moves **out** to the top level; a `.dropline` marks
+  sibling inserts. A phase (group) itself stays top-level (two-level model), and a phase
+  emptied by moving its last child out simply becomes a plain task. On drop the item is
+  spliced from its old list into the new one and `render()`+`saveStorage()` rewrite the
+  `.org` heading order **and levels** (`*` ↔ `**`). Move/up listeners are bound to `window`
+  (not the bar) because a reschedule re-renders the chart mid-drag and destroys the grabbed
+  bar element — element-bound listeners would sever the drag after the first pixel. (Note:
+  the gap immediately after an expanded phase's last child resolves into that phase, so to
+  land at the top level right after a phase, drop beside another top-level row.)
 - The faux Emacs modeline under the buffer shows `**` when dirty. Keep it — it's the
   app's personality. The buffer is **collapsed by default** (`.buffer.collapsed` hides the
   textarea/applybar/modeline/Revert; the `#bufBar` tabbar toggles it, caret rotates,

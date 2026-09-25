@@ -25,8 +25,10 @@ org-mode, so you can drag bars around in the browser and edit the same file in E
   so it round-trips with Emacs. *(Server/demo mode.)*
 - **Drag to reschedule** — drag a bar left/right to move its dates (1-day steps); the
   change is written straight back to the `.org` file.
-- **Drag to reorder** — drag a bar up/down to change task order (rewrites the heading
-  order in the file). A single gesture: horizontal moves dates, vertical reorders.
+- **Drag to reorder & re-parent** — drag a bar up/down to change task order, or drop it
+  onto a phase to move it **into** that phase (or back out to the top level); the heading
+  order and nesting in the file are rewritten to match. A single gesture: horizontal moves
+  dates, vertical reorders.
 - **Resize** — drag a bar's right edge to change its duration.
 - **Phases** — any heading with sub-headings becomes a phase; its span, progress, and
   `[n/m]` completion cookie are **derived from its children**, so the chart and file
