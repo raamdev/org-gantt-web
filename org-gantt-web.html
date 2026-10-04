@@ -355,7 +355,14 @@
   }
   .label-cell:last-child { border-bottom: none; }
   .label-cell .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .label-cell .donebox { flex: none; width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: var(--done); }
+  /* done toggle: hidden by default for a clean list, revealed on row hover (or keyboard
+     focus). pointer-events:none while hidden so clicking the row still opens the editor. */
+  .label-cell .donebox {
+    flex: none; width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: var(--done);
+    opacity: 0; pointer-events: none; transition: opacity 0.08s;
+  }
+  .label-cell.hover .donebox,
+  .label-cell .donebox:focus-visible { opacity: 1; pointer-events: auto; }
   .label-cell.child { padding-left: 38px; font-weight: 500; font-size: 12.5px; color: var(--ink-soft); }
   .label-cell.group { font-weight: 700; }
   .label-cell.selected { background: var(--sel); }

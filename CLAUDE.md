@@ -166,7 +166,10 @@ Rules:
   it to 100%/`DONE` or back to 0% — a leaf sets its own `progress` (or its org-checkbox
   `subs`), a phase (whose progress is derived) marks every child. Milestones get no
   checkbox; partial progress (0<ep<100) shows the box `indeterminate`. The checkbox
-  `stopPropagation`s so it doesn't open the editor.
+  `stopPropagation`s so it doesn't open the editor. It is **hidden by default**
+  (`opacity:0; pointer-events:none`) and revealed on the whole-row `.hover` (the
+  `applyHover` class, so either pane reveals it) or on `:focus-visible`, keeping the list
+  clean; space stays reserved so names don't shift.
 - `chartRange()` spans the file's earliest task start → latest end/target, padded
   **±1 week** (`addDays`), start snapped to Monday. The `.chart-scroll` pane is wider
   than its container at normal zoom, so only the timeline scrolls/swipes horizontally
