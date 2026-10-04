@@ -53,7 +53,11 @@ demo → nothing. `MODE`, `currentProjectId`, and `projects` hold the mode state
   fields, parsed from its `#+KANBAN_*` header keywords. `kanban.org` is excluded (it's
   the board, not a project).
 - `GET /api/projects/{id}` → `{id, name, text, mtime}` (also bumps last-opened).
-- `POST /api/projects {name}` → creates `<slug>.org` from a starter template.
+- `POST /api/projects {name}` → creates `<slug>.org` from `starter_org`: a single
+  top-level heading named after the project (`* TODO <name>`) and **no filler task**. It's
+  a leaf heading until you add a task under it (editor's "Add a child task"), at which point
+  it becomes a phase named after the project. (A phase can't exist with zero tasks, so the
+  "empty phase" the user wants is a lone heading that grows into one.)
 - `PUT /api/projects/{id} {text}` → atomic write (`.tmp` + `os.replace`).
 - `PATCH /api/projects/{id} {title?, column?, order?, note?}` → in-place edit of just
   those header keywords (`apply_card_patch` / `set_header_keyword`), preserving the rest

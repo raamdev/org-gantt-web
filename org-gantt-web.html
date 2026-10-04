@@ -1360,7 +1360,10 @@
     closeProjectMenu();
     if (MODE === "demo") {   // demo never persists — just start a fresh local doc
       currentProjectId = null;
-      state = defaultState(); state.title = name || "Untitled project";
+      const t = todayIso(), nm = name || "Untitled project";
+      // Match the server starter: a single heading named after the project, no filler task.
+      state = { title: nm, targetDate: null,
+                items: [{ id: nextId(), type: "task", name: nm, start: t, end: t, progress: 0, subs: [], children: [] }] };
       render(); updateProjectButton();
       return;
     }

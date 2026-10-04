@@ -17,7 +17,7 @@ import json
 import os
 import re
 import threading
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, unquote
 
@@ -29,7 +29,6 @@ STATE_NAME = ".org-gantt-state.json"          # per-dir "recently opened" tracki
 # can never escape the projects directory (matters once this is public).
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]*\.org$")
 TITLE_RE = re.compile(r"^#\+TITLE:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
-DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 # The kanban board. Its ordered column list lives in a plain .org file (one heading
 # per column) alongside the projects, so it round-trips with Emacs like everything
@@ -229,21 +228,10 @@ def log(msg):
     print("[%s] %s" % (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), msg), flush=True)
 
 
-def org_stamp(d):
-    return "<%s %s>" % (d.isoformat(), DOW[d.weekday()])
-
-
 def starter_org(title):
-    today = date.today()
-    return (
-        "#+TITLE: %s\n"
-        "#+TODO: TODO | DONE\n\n"
-        "* TODO First task\n"
-        "SCHEDULED: %s DEADLINE: %s\n"
-        ":PROPERTIES:\n"
-        ":PROGRESS: 0\n"
-        ":END:\n"
-    ) % (title, org_stamp(today), org_stamp(today + timedelta(days=3)))
+    # A new project starts as a single heading named after the project — no filler task.
+    # It renders as one item and becomes a phase as soon as you add a task under it.
+    return "#+TITLE: %s\n#+TODO: TODO | DONE\n\n* TODO %s\n" % (title, title)
 
 
 def slugify(name):
