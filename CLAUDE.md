@@ -162,6 +162,11 @@ Rules:
   `.chart-scroll` holding the day grid + bars. Labels are their own column, never
   overlaying the grid. A `.col-resizer` splitter between them (`initColResizer`) drags
   the label column width (clamped 120–640px, persisted in localStorage `org-gantt-labelw`).
+  Each task/phase label cell leads with a done checkbox (`.donebox`): `setItemDone` ticks
+  it to 100%/`DONE` or back to 0% — a leaf sets its own `progress` (or its org-checkbox
+  `subs`), a phase (whose progress is derived) marks every child. Milestones get no
+  checkbox; partial progress (0<ep<100) shows the box `indeterminate`. The checkbox
+  `stopPropagation`s so it doesn't open the editor.
 - `chartRange()` spans the file's earliest task start → latest end/target, padded
   **±1 week** (`addDays`), start snapped to Monday. The `.chart-scroll` pane is wider
   than its container at normal zoom, so only the timeline scrolls/swipes horizontally

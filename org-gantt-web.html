@@ -355,6 +355,7 @@
   }
   .label-cell:last-child { border-bottom: none; }
   .label-cell .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .label-cell .donebox { flex: none; width: 14px; height: 14px; margin: 0; cursor: pointer; accent-color: var(--done); }
   .label-cell.child { padding-left: 38px; font-weight: 500; font-size: 12.5px; color: var(--ink-soft); }
   .label-cell.group { font-weight: 700; }
   .label-cell.selected { background: var(--sel); }
@@ -858,6 +859,17 @@
   function childCookie(it) {
     const done = it.children.filter((c) => effProgress(c) >= 100).length;
     return done + "/" + it.children.length;
+  }
+  // Mark an item 100% done (or not). A leaf sets its own progress (or ticks its org
+  // checkboxes, if any); a phase can't hold progress, so it marks every child.
+  function setItemDone(it, done) {
+    const val = done ? 100 : 0;
+    function setLeaf(leaf) {
+      if (leaf.subs && leaf.subs.length) for (const s of leaf.subs) s.done = done;
+      else leaf.progress = val;
+    }
+    if (isGroup(it)) it.children.forEach(setLeaf);
+    else setLeaf(it);
   }
   function syncGroups() {
     for (const it of state.items) {
@@ -2280,6 +2292,23 @@
       cell.className = "label-cell" + (depth ? " child" : "") + (group ? " group" : "") +
         (it.id === selectedId ? " selected" : "");
       cell.dataset.id = it.id;
+      if (it.type !== "milestone") {           // quick done toggle for tasks & phases
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.className = "donebox";
+        const ep = effProgress(it);
+        box.checked = ep >= 100;
+        box.indeterminate = ep > 0 && ep < 100;
+        box.title = box.checked ? "Mark not done" : "Mark 100% done";
+        box.setAttribute("aria-label", (box.checked ? "Mark not done: " : "Mark 100% done: ") + it.name);
+        box.addEventListener("click", (e) => e.stopPropagation());   // don't open the editor
+        box.addEventListener("change", () => {
+          setItemDone(it, box.checked);
+          render(); saveStorage();
+          if (selectedId) { const f = findItem(selectedId).item; if (f) fillEditor(f); }
+        });
+        cell.appendChild(box);
+      }
       if (group) {
         const tog = document.createElement("button");
         tog.className = "toggle";
