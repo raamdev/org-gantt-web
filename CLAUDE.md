@@ -127,8 +127,10 @@ Rules:
   future feature, not a current one.)
 - **Kanban card fields** (file-level header keywords, all optional): `#+KANBAN_COLUMN:`
   (which board column this project sits in — absent/unknown ⇒ the first column),
-  `#+KANBAN_ORDER:` (integer sort key within the column), `#+KANBAN_NOTE:` (a one-line
-  card note). The card's *title* is just the project's `#+TITLE`. `parseOrg`/`serialize`
+  `#+KANBAN_ORDER:` (integer sort key within the column), `#+KANBAN_NOTE:` (the card
+  note; a multi-line note is consecutive `#+KANBAN_NOTE:` lines, one per line, e.g.
+  `- item` bullets, an empty value for a blank line; normalized by `normNote` /
+  `norm_note`). The card's *title* is just the project's `#+TITLE`. `parseOrg`/`serialize`
   round-trip these verbatim, so editing a project in the gantt view never drops them.
 - **The board file** `kanban.org` (a real, non-hidden `.org` in the project dir) holds
   the ordered column list — one top-level heading per column — plus each column's optional

@@ -959,6 +959,18 @@
     }
   }
 
+  // Card notes may span lines: collapse whitespace within each line, keep at most one
+  // blank line in a row, drop leading/trailing blanks. Mirrors server.py's norm_note.
+  function normNote(v) {
+    const out = [];
+    for (let ln of String(v || "").split("\n")) {
+      ln = ln.replace(/\s+/g, " ").trim();
+      if (ln || (out.length && out[out.length - 1])) out.push(ln);
+    }
+    while (out.length && !out[out.length - 1]) out.pop();
+    return out.join("\n");
+  }
+
   function serialize(st) {
     const lines = [];
     lines.push("#+TITLE: " + st.title);
@@ -966,7 +978,8 @@
     lines.push("#+TODO: TODO | DONE");
     if (st.kanbanColumn) lines.push("#+KANBAN_COLUMN: " + st.kanbanColumn);
     if (st.kanbanOrder != null) lines.push("#+KANBAN_ORDER: " + st.kanbanOrder);
-    if (st.kanbanNote) lines.push("#+KANBAN_NOTE: " + st.kanbanNote);
+    // A multi-line note is one #+KANBAN_NOTE: line per line of the note.
+    if (st.kanbanNote) for (const ln of st.kanbanNote.split("\n")) lines.push(("#+KANBAN_NOTE: " + ln).trimEnd());
     lines.push("");
     for (const it of st.items) {
       if (isGroup(it)) {
@@ -984,6 +997,7 @@
     const st = { title: "Untitled project", targetDate: null, items: [],
                  kanbanColumn: null, kanbanOrder: null, kanbanNote: null };
     const lines = text.split(/\r?\n/);
+    const noteLines = [];
     let cur = null;       // heading currently receiving metadata lines
     let curTop = null;    // current top-level item (potential parent)
     const stampRe = /<(\d{4}-\d{2}-\d{2})[^>]*>/;
@@ -998,7 +1012,7 @@
       // Kanban card fields — preserved verbatim so chart edits never drop them.
       if ((m = line.match(/^#\+KANBAN_COLUMN:\s*(.+)$/i))) { st.kanbanColumn = m[1].trim(); continue; }
       if ((m = line.match(/^#\+KANBAN_ORDER:\s*(-?\d+)/i))) { st.kanbanOrder = parseInt(m[1], 10); continue; }
-      if ((m = line.match(/^#\+KANBAN_NOTE:\s*(.*)$/i))) { st.kanbanNote = m[1].trim(); continue; }
+      if ((m = line.match(/^#\+KANBAN_NOTE:\s*(.*)$/i))) { noteLines.push(m[1]); continue; }
       if ((m = line.match(/^(\*+)\s+(?:(TODO|DONE|NEXT|WAIT|WAITING|CANCELLED)\s+)?(.*)$/))) {
         const level = m[1].length;
         const kw = m[2] || null;
@@ -1036,6 +1050,7 @@
       }
     }
 
+    st.kanbanNote = normNote(noteLines.join("\n")) || null;
     const t = todayIso();
     function normLeaf(it) {
       if (it.type === "milestone") {
@@ -1765,7 +1780,7 @@
   function saveCardEditor() {
     if (!editingCardId) return closeCardEditor();
     const title = document.getElementById("cardTitle").value.trim();
-    const note = document.getElementById("cardNote").value.replace(/\s*\n\s*/g, " ").trim();
+    const note = normNote(document.getElementById("cardNote").value);
     const fields = { note };
     if (title) fields.title = title;
     applyCardEdit(editingCardId, fields);

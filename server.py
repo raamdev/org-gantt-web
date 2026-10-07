@@ -39,7 +39,7 @@ BOARD_NAME = "kanban.org"
 DEFAULT_COLUMNS = ["Next up", "In progress", "Done"]
 KAN_COLUMN_RE = re.compile(r"^#\+KANBAN_COLUMN:\s*(.+)$", re.IGNORECASE | re.MULTILINE)
 KAN_ORDER_RE = re.compile(r"^#\+KANBAN_ORDER:\s*(-?\d+)", re.IGNORECASE | re.MULTILINE)
-KAN_NOTE_RE = re.compile(r"^#\+KANBAN_NOTE:\s*(.*)$", re.IGNORECASE | re.MULTILINE)
+KAN_NOTE_RE = re.compile(r"^#\+KANBAN_NOTE:[ \t]*(.*)$", re.IGNORECASE | re.MULTILINE)
 HEADING_RE = re.compile(r"^\*+\s")
 
 
@@ -48,18 +48,34 @@ def kanban_of(text):
     text = text or ""
     mc = KAN_COLUMN_RE.search(text)
     mo = KAN_ORDER_RE.search(text)
-    mn = KAN_NOTE_RE.search(text)
+    # A multi-line note is stored as consecutive #+KANBAN_NOTE: lines, one per line.
+    note = norm_note("\n".join(m.group(1) for m in KAN_NOTE_RE.finditer(text)))
     return {
         "column": mc.group(1).strip() if mc else None,
         "order": int(mo.group(1)) if mo else None,
-        "note": mn.group(1).strip() if mn else "",
+        "note": note,
     }
+
+
+def norm_note(v):
+    """Normalize a card note: collapse whitespace within each line, keep at most one
+    blank line in a row, and drop leading/trailing blank lines."""
+    out = []
+    for ln in str(v or "").split("\n"):
+        ln = re.sub(r"\s+", " ", ln).strip()
+        if ln or (out and out[-1]):
+            out.append(ln)
+    while out and not out[-1]:
+        out.pop()
+    return "\n".join(out)
 
 
 def set_header_keyword(text, key, value):
     """Insert/replace/remove a `#+KEY: value` line in the header block (everything
-    before the first `*` heading). value=None removes the line. Returns new text.
-    Keeps unrelated keywords and body untouched so the file round-trips cleanly."""
+    before the first `*` heading). value=None removes the line; a list value writes
+    one `#+KEY:` line per item (multi-line notes). Any existing lines for KEY are
+    replaced in place. Returns new text. Keeps unrelated keywords and body untouched
+    so the file round-trips cleanly."""
     lines = (text or "").split("\n")
     hstart = len(lines)
     for i, ln in enumerate(lines):
@@ -67,21 +83,22 @@ def set_header_keyword(text, key, value):
             hstart = i
             break
     key_re = re.compile(r"^#\+" + re.escape(key) + r":", re.IGNORECASE)
-    idx, last_kw = None, -1
+    idx, last_kw, kept = None, -1, []
     for i in range(hstart):
+        if key_re.match(lines[i]):
+            if idx is None:
+                idx = len(kept)
+            continue
         if lines[i].startswith("#+"):
-            last_kw = i
-            if key_re.match(lines[i]):
-                idx = i
+            last_kw = len(kept)
+        kept.append(lines[i])
+    lines = kept + lines[hstart:]
     if value is None:
-        if idx is not None:
-            del lines[idx]
         return "\n".join(lines)
-    newline = "#+%s: %s" % (key, value)
-    if idx is not None:
-        lines[idx] = newline
-    else:
-        lines.insert(last_kw + 1 if last_kw >= 0 else 0, newline)
+    values = value if isinstance(value, list) else [value]
+    new = [("#+%s: %s" % (key, v)).rstrip() for v in values]
+    at = idx if idx is not None else (last_kw + 1 if last_kw >= 0 else 0)
+    lines[at:at] = new
     return "\n".join(lines)
 
 
@@ -100,8 +117,8 @@ def apply_card_patch(text, fields):
         v = fields["order"]
         text = set_header_keyword(text, "KANBAN_ORDER", None if v is None else str(int(v)))
     if "note" in fields:
-        v = fields["note"]
-        text = set_header_keyword(text, "KANBAN_NOTE", clean(v) if v and clean(v) else None)
+        v = norm_note(fields["note"])
+        text = set_header_keyword(text, "KANBAN_NOTE", v.split("\n") if v else None)
     return text
 
 
